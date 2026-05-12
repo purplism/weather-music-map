@@ -5,6 +5,10 @@ let pendingSwitchId = null;
 
 const TRANSITION_TIME = 0.35;
 
+export async function unlockWeatherMusicAudio() {
+  await Tone.start();
+}
+
 let masterVolume = 0.7;
 
 export function setWeatherMusicVolume(value) {
@@ -92,7 +96,7 @@ const filter = new Tone.Filter({
   wet: settings.chorusWet,
 }).connect(delay);
 
-  chorus.start();
+  chorus.start(startTime);
 
   const melodySynth = new Tone.FMSynth({
     harmonicity: settings.isSnowy ? 2.8 : settings.isStormy ? 1.2 : 1.8,

@@ -2,9 +2,10 @@ import {
   requestWeatherMusicChange,
   stopWeatherMusic,
   setWeatherMusicVolume,
+  unlockWeatherMusicAudio,
 } from "./music";
 import { weatherToMusic } from "./weatherToMusic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -17,6 +18,8 @@ import L from "leaflet";
 import { getWeather } from "./weather";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
+
+const RADAR_MAX_ZOOM = 7;
 
 const palestineLabelIcon = L.divIcon({
   className: "palestine-label",
@@ -32,11 +35,23 @@ const selectedLocationIcon = L.divIcon({
   iconAnchor: [16, 32],
 });
 
+function normalizeLongitude(lon) {
+  return ((((lon + 180) % 360) + 360) % 360) - 180;
+}
+
+function getRandomLocation() {
+  const lat = -60 + Math.random() * 135; // -60 to 75
+  const lon = -180 + Math.random() * 360;
+
+  return { lat, lon };
+}
+
 function ClickHandler({ onMapClick }) {
   useMapEvents({
     click(e) {
       const lat = e.latlng.lat;
-      const lon = ((((e.latlng.lng + 180) % 360) + 360) % 360) - 180;
+      const lon = normalizeLongitude(e.latlng.lng);
+
       onMapClick(lat, lon);
     },
   });
@@ -54,7 +69,7 @@ function RadarLayer({ radarUrl }) {
     },
   });
 
-  if (!radarUrl || zoom > 7) {
+  if (!radarUrl || zoom > RADAR_MAX_ZOOM) {
     return null;
   }
 
@@ -64,8 +79,8 @@ function RadarLayer({ radarUrl }) {
       attribution='Radar &copy; RainViewer'
       url={radarUrl}
       opacity={0.55}
-      maxZoom={7}
-      maxNativeZoom={7}
+      maxZoom={RADAR_MAX_ZOOM}
+      maxNativeZoom={RADAR_MAX_ZOOM}
       zIndex={300}
     />
   );
@@ -81,6 +96,8 @@ function App() {
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
   const [volume, setVolume] = useState(0.7);
 
+  const latestRequestId = useRef(0);
+
   useEffect(() => {
     async function loadRadar() {
       try {
@@ -90,7 +107,6 @@ function App() {
 
         const data = await response.json();
         const latestRadarFrame = data.radar.past[data.radar.past.length - 1];
-
         const url = `${data.host}${latestRadarFrame.path}/256/{z}/{x}/{y}/2/1_1.png`;
 
         setRadarUrl(url);
@@ -103,6 +119,15 @@ function App() {
   }, []);
 
   async function handleMapClick(lat, lon) {
+    const requestId = latestRequestId.current + 1;
+    latestRequestId.current = requestId;
+
+    try {
+      await unlockWeatherMusicAudio();
+    } catch (error) {
+      console.warn("Audio unlock failed:", error);
+    }
+
     setClickedLocation({ lat, lon });
     setWeather(null);
     setWeatherError("");
@@ -110,6 +135,11 @@ function App() {
 
     try {
       const currentWeather = await getWeather(lat, lon);
+
+      if (requestId !== latestRequestId.current) {
+        return;
+      }
+
       setWeather(currentWeather);
 
       const musicSettings = weatherToMusic(currentWeather);
@@ -119,39 +149,41 @@ function App() {
       requestWeatherMusicChange(musicSettings);
       setIsMusicPlaying(true);
     } catch (error) {
+      if (requestId !== latestRequestId.current) {
+        return;
+      }
+
       console.error(error);
       setWeatherError("Could not load weather for this location.");
     } finally {
-      setLoadingWeather(false);
+      if (requestId === latestRequestId.current) {
+        setLoadingWeather(false);
+      }
     }
   }
 
-  function getRandomLocation() {
-  const lat = -60 + Math.random() * 135; // -60 to 75
-  const lon = -180 + Math.random() * 360;
-  return { lat, lon };
-}
+  function handleMusicButtonClick() {
+    if (isMusicPlaying) {
+      stopWeatherMusic();
+      setIsMusicPlaying(false);
+      return;
+    }
 
-function handleMusicButtonClick() {
-  if (isMusicPlaying) {
-    stopWeatherMusic();
-    setIsMusicPlaying(false);
-    return;
-  }
+    if (clickedLocation) {
+      handleMapClick(clickedLocation.lat, clickedLocation.lon);
+      return;
+    }
 
-  if (clickedLocation) {
-    handleMapClick(clickedLocation.lat, clickedLocation.lon);
-  } else {
     const randomLocation = getRandomLocation();
     handleMapClick(randomLocation.lat, randomLocation.lon);
   }
-}
 
   function handleVolumeChange(e) {
-  const newVolume = Number(e.target.value);
-  setVolume(newVolume);
-  setWeatherMusicVolume(newVolume);
-}
+    const newVolume = Number(e.target.value);
+
+    setVolume(newVolume);
+    setWeatherMusicVolume(newVolume);
+  }
 
   return (
     <div className="app">
@@ -178,28 +210,28 @@ function handleMusicButtonClick() {
         </div>
 
         <div className="control-box">
-  <h2>Music</h2>
+          <h2>Music</h2>
 
-  <button className="music-toggle-button" onClick={handleMusicButtonClick}>
-    {isMusicPlaying ? "❚❚" : "▶"}
-  </button>
+          <button className="music-toggle-button" onClick={handleMusicButtonClick}>
+            {isMusicPlaying ? "❚❚" : "▶"}
+          </button>
 
-  <div className="volume-control">
-    <label htmlFor="volume-slider">
-      Volume: {Math.round(volume * 100)}%
-    </label>
+          <div className="volume-control">
+            <label htmlFor="volume-slider">
+              Volume: {Math.round(volume * 100)}%
+            </label>
 
-    <input
-      id="volume-slider"
-      type="range"
-      min="0"
-      max="1"
-      step="0.01"
-      value={volume}
-      onChange={handleVolumeChange}
-    />
-  </div>
-</div>
+            <input
+              id="volume-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volume}
+              onChange={handleVolumeChange}
+            />
+          </div>
+        </div>
 
         {clickedLocation ? (
           <div className="location-box">
@@ -285,17 +317,17 @@ function handleMusicButtonClick() {
           interactive={false}
           zIndexOffset={1000}
         />
-        
-        {clickedLocation && (
-  <Marker
-    position={[clickedLocation.lat, clickedLocation.lon]}
-    icon={selectedLocationIcon}
-    interactive={false}
-    zIndexOffset={1200}
-  />
-)}
 
-      <AttributionControl position="bottomright" prefix={false} />
+        {clickedLocation && (
+          <Marker
+            position={[clickedLocation.lat, clickedLocation.lon]}
+            icon={selectedLocationIcon}
+            interactive={false}
+            zIndexOffset={1200}
+          />
+        )}
+
+        <AttributionControl position="bottomright" prefix={false} />
 
         <ClickHandler onMapClick={handleMapClick} />
       </MapContainer>
