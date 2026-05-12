@@ -119,3 +119,12 @@ body {
 .volume-control input {
   width: 100%;
 }
+
+.music-toggle-button {
+  width: 44px;
+  height: 36px;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  padding: 0;
+}

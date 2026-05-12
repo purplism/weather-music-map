@@ -126,10 +126,26 @@ function App() {
     }
   }
 
-  function handlePauseMusic() {
+  function getRandomLocation() {
+  const lat = -60 + Math.random() * 135; // -60 to 75
+  const lon = -180 + Math.random() * 360;
+  return { lat, lon };
+}
+
+function handleMusicButtonClick() {
+  if (isMusicPlaying) {
     stopWeatherMusic();
     setIsMusicPlaying(false);
+    return;
   }
+
+  if (clickedLocation) {
+    handleMapClick(clickedLocation.lat, clickedLocation.lon);
+  } else {
+    const randomLocation = getRandomLocation();
+    handleMapClick(randomLocation.lat, randomLocation.lon);
+  }
+}
 
   function handleVolumeChange(e) {
   const newVolume = Number(e.target.value);
@@ -164,8 +180,8 @@ function App() {
         <div className="control-box">
   <h2>Music</h2>
 
-  <button onClick={handlePauseMusic} disabled={!isMusicPlaying}>
-    Pause Music
+  <button className="music-toggle-button" onClick={handleMusicButtonClick}>
+    {isMusicPlaying ? "❚❚" : "▶"}
   </button>
 
   <div className="volume-control">

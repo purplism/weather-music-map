@@ -67,22 +67,30 @@ const filter = new Tone.Filter({
 }).connect(outputGain);
 
   const reverb = new Tone.Reverb({
-    decay: settings.isFoggy ? 8 : settings.isRainy ? 5 : 3,
-    wet: settings.reverbWet,
-  }).connect(filter);
+  decay: settings.isFoggy
+    ? 5 + settings.humidityAmount * 5
+    : settings.isRainy
+    ? 3 + settings.humidityAmount * 4
+    : 2 + settings.humidityAmount * 3,
+  wet: settings.reverbWet,
+}).connect(filter);
 
   const delay = new Tone.FeedbackDelay({
-    delayTime: settings.isStormy ? "16n" : "8n",
-    feedback: settings.isStormy ? 0.38 : 0.24,
-    wet: settings.isClear ? 0.18 : 0.28,
-  }).connect(reverb);
+  delayTime: settings.isStormy ? "16n" : "8n",
+  feedback: settings.isStormy
+    ? Math.min(0.6, settings.delayFeedback + 0.18)
+    : settings.delayFeedback,
+  wet: settings.delayWet,
+}).connect(reverb);
 
   const chorus = new Tone.Chorus({
-    frequency: settings.isFoggy ? 0.5 : 1.4,
-    delayTime: 3.5,
-    depth: settings.isFoggy ? 0.7 : 0.35,
-    wet: settings.isClear ? 0.18 : 0.32,
-  }).connect(delay);
+  frequency: settings.isFoggy ? 0.45 : 1.2 + settings.humidityAmount * 0.8,
+  delayTime: 2.5 + settings.humidityAmount * 3,
+  depth: settings.isFoggy
+    ? 0.5 + settings.humidityAmount * 0.4
+    : 0.2 + settings.humidityAmount * 0.55,
+  wet: settings.chorusWet,
+}).connect(delay);
 
   chorus.start();
 

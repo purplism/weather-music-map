@@ -173,7 +173,12 @@ export function weatherToMusic(weather) {
   const scale = pickTemperatureRegister(fullScale, temperature);
 
   const brightness = Math.max(500, 3500 - cloudCover * 28);
-  const reverbWet = Math.min(0.75, 0.15 + humidity / 140);
+  const humidityAmount = clamp(humidity / 100, 0, 1);
+
+const reverbWet = 0.12 + humidityAmount * 0.55;
+const chorusWet = 0.08 + humidityAmount * 0.35;
+const delayWet = 0.08 + humidityAmount * 0.3;
+const delayFeedback = 0.12 + humidityAmount * 0.25;
   const rainIntensity = Math.min(1, rain * 8);
   const stormIntensity = isStormy ? 1 : 0;
 
@@ -191,6 +196,10 @@ export function weatherToMusic(weather) {
     bassNotes,
     brightness,
     reverbWet,
+    humidityAmount,
+    chorusWet,
+    delayWet,
+    delayFeedback,
     rainIntensity,
     stormIntensity,
     isRainy,
