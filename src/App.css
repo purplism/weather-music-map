@@ -1,0 +1,87 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, Arial, sans-serif;
+}
+
+.app {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+}
+
+.sidebar {
+  width: 320px;
+  padding: 24px;
+  background: #111827;
+  color: white;
+}
+
+.sidebar h1 {
+  margin-top: 0;
+  font-size: 28px;
+}
+
+.location-box {
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #1f2937;
+}
+
+.map {
+  flex: 1;
+  height: 100vh;
+}
+
+.weather-box {
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #1f2937;
+}
+
+.weather-box h2 {
+  margin-top: 0;
+  font-size: 20px;
+}
+
+.control-box {
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #1f2937;
+}
+
+.control-box h2 {
+  margin-top: 0;
+  font-size: 20px;
+}
+
+.control-box button {
+  margin-right: 8px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: #374151;
+  color: white;
+  cursor: pointer;
+}
+
+.control-box button:hover {
+  background: #4b5563;
+}
+
+.control-box button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.active-button {
+  background: #2563eb !important;
+}
+
