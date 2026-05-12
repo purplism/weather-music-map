@@ -1,4 +1,8 @@
-import { requestWeatherMusicChange, stopWeatherMusic } from "./music";
+import {
+  requestWeatherMusicChange,
+  stopWeatherMusic,
+  setWeatherMusicVolume,
+} from "./music";
 import { weatherToMusic } from "./weatherToMusic";
 import { useEffect, useState } from "react";
 import {
@@ -7,6 +11,7 @@ import {
   useMap,
   useMapEvents,
   Marker,
+  AttributionControl,
 } from "react-leaflet";
 import L from "leaflet";
 import { getWeather } from "./weather";
@@ -74,6 +79,7 @@ function App() {
   const [radarUrl, setRadarUrl] = useState("");
   const [mapStyle, setMapStyle] = useState("default");
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [volume, setVolume] = useState(0.7);
 
   useEffect(() => {
     async function loadRadar() {
@@ -125,6 +131,12 @@ function App() {
     setIsMusicPlaying(false);
   }
 
+  function handleVolumeChange(e) {
+  const newVolume = Number(e.target.value);
+  setVolume(newVolume);
+  setWeatherMusicVolume(newVolume);
+}
+
   return (
     <div className="app">
       <div className="sidebar">
@@ -150,12 +162,28 @@ function App() {
         </div>
 
         <div className="control-box">
-          <h2>Music</h2>
+  <h2>Music</h2>
 
-          <button onClick={handlePauseMusic} disabled={!isMusicPlaying}>
-            Pause Music
-          </button>
-        </div>
+  <button onClick={handlePauseMusic} disabled={!isMusicPlaying}>
+    Pause Music
+  </button>
+
+  <div className="volume-control">
+    <label htmlFor="volume-slider">
+      Volume: {Math.round(volume * 100)}%
+    </label>
+
+    <input
+      id="volume-slider"
+      type="range"
+      min="0"
+      max="1"
+      step="0.01"
+      value={volume}
+      onChange={handleVolumeChange}
+    />
+  </div>
+</div>
 
         {clickedLocation ? (
           <div className="location-box">
@@ -206,6 +234,7 @@ function App() {
         maxZoom={18}
         worldCopyJump={true}
         className="map"
+        attributionControl={false}
       >
         {mapStyle === "default" && (
           <TileLayer
@@ -249,6 +278,8 @@ function App() {
     zIndexOffset={1200}
   />
 )}
+
+      <AttributionControl position="bottomright" prefix={false} />
 
         <ClickHandler onMapClick={handleMapClick} />
       </MapContainer>

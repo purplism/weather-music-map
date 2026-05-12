@@ -105,3 +105,17 @@ body {
   transform: translateY(-2px);
   pointer-events: none;
 }
+
+.volume-control {
+  margin-top: 12px;
+}
+
+.volume-control label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.volume-control input {
+  width: 100%;
+}

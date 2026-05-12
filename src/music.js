@@ -3,6 +3,18 @@ import * as Tone from "tone";
 let activeMusic = null;
 let pendingSwitchId = null;
 
+const TRANSITION_TIME = 0.35;
+
+let masterVolume = 0.7;
+
+export function setWeatherMusicVolume(value) {
+  masterVolume = Math.max(0, Math.min(1, value));
+
+  if (activeMusic?.gain) {
+    activeMusic.gain.gain.rampTo(masterVolume, 0.1);
+  }
+}
+
 function disposePart(part) {
   if (part) {
     part.stop();
@@ -24,119 +36,174 @@ function disposeMusic(music) {
   disposePart(music.padLoop);
   disposePart(music.rainLoop);
   disposePart(music.stormLoop);
+  disposePart(music.sparkleLoop);
 
   disposeNode(music.melodySynth);
   disposeNode(music.bassSynth);
   disposeNode(music.padSynth);
-  disposeNode(music.noiseSynth);
+  disposeNode(music.rainSynth);
+  disposeNode(music.sparkleSynth);
 
+  disposeNode(music.chorus);
   disposeNode(music.delay);
   disposeNode(music.reverb);
   disposeNode(music.filter);
+  disposeNode(music.outputGain);
+  disposeNode(music.limiter);
   disposeNode(music.gain);
 }
 
 function createWeatherMusic(settings, startTime) {
   const gain = new Tone.Gain(0).toDestination();
 
-  const filter = new Tone.Filter({
-    frequency: settings.brightness,
-    type: "lowpass",
-    rolloff: -24,
-  }).connect(gain);
+const limiter = new Tone.Limiter(-1).connect(gain);
+
+const outputGain = new Tone.Gain(1.5).connect(limiter);
+
+const filter = new Tone.Filter({
+  frequency: settings.brightness,
+  type: "lowpass",
+  rolloff: -24,
+}).connect(outputGain);
 
   const reverb = new Tone.Reverb({
-    decay: settings.isFoggy ? 7 : settings.isRainy ? 4 : 2.5,
+    decay: settings.isFoggy ? 8 : settings.isRainy ? 5 : 3,
     wet: settings.reverbWet,
   }).connect(filter);
 
   const delay = new Tone.FeedbackDelay({
-    delayTime: "8n",
-    feedback: settings.isStormy ? 0.45 : 0.25,
-    wet: settings.isClear ? 0.15 : 0.3,
+    delayTime: settings.isStormy ? "16n" : "8n",
+    feedback: settings.isStormy ? 0.38 : 0.24,
+    wet: settings.isClear ? 0.18 : 0.28,
   }).connect(reverb);
 
-  const melodySynth = new Tone.Synth({
+  const chorus = new Tone.Chorus({
+    frequency: settings.isFoggy ? 0.5 : 1.4,
+    delayTime: 3.5,
+    depth: settings.isFoggy ? 0.7 : 0.35,
+    wet: settings.isClear ? 0.18 : 0.32,
+  }).connect(delay);
+
+  chorus.start();
+
+  const melodySynth = new Tone.FMSynth({
+    harmonicity: settings.isSnowy ? 2.8 : settings.isStormy ? 1.2 : 1.8,
+    modulationIndex: settings.isStormy ? 8 : settings.isSnowy ? 5 : 2.5,
     oscillator: {
-      type: settings.isSnowy
-        ? "triangle"
-        : settings.isStormy
-        ? "sawtooth"
-        : "sine",
+      type: settings.isStormy ? "sawtooth" : "sine",
     },
     envelope: {
-      attack: 0.02,
-      decay: 0.18,
-      sustain: 0.25,
+      attack: settings.isFoggy ? 0.12 : 0.02,
+      decay: 0.25,
+      sustain: 0.18,
+      release: settings.isFoggy ? 1.5 : 0.8,
+    },
+    modulation: {
+      type: "sine",
+    },
+    modulationEnvelope: {
+      attack: 0.04,
+      decay: 0.2,
+      sustain: 0.15,
       release: 0.7,
     },
-  }).connect(delay);
+    volume: settings.isStormy ? -13 : -10,
+  }).connect(chorus);
 
   const bassSynth = new Tone.MonoSynth({
     oscillator: {
-      type: "triangle",
+      type: settings.isStormy ? "sawtooth" : "triangle",
     },
     filter: {
-      Q: 1,
+      Q: settings.isStormy ? 2 : 1,
       type: "lowpass",
       rolloff: -24,
     },
     envelope: {
-      attack: 0.04,
-      decay: 0.25,
-      sustain: 0.35,
-      release: 1.2,
+      attack: 0.03,
+      decay: 0.22,
+      sustain: 0.28,
+      release: 1.1,
     },
     filterEnvelope: {
       attack: 0.02,
-      decay: 0.2,
-      sustain: 0.2,
+      decay: 0.25,
+      sustain: 0.18,
       release: 1,
-      baseFrequency: 120,
-      octaves: 2,
+      baseFrequency: settings.isStormy ? 90 : 120,
+      octaves: settings.isStormy ? 3 : 2,
     },
+    volume: -15,
   }).connect(reverb);
 
-  const padSynth = new Tone.PolySynth(Tone.Synth, {
+  const padSynth = new Tone.PolySynth(Tone.AMSynth, {
+    harmonicity: settings.isFoggy ? 0.8 : 1.5,
     oscillator: {
       type: settings.isClear ? "sine" : "triangle",
     },
     envelope: {
-      attack: 1.5,
-      decay: 0.5,
-      sustain: 0.6,
-      release: 3,
+      attack: settings.isFoggy ? 2.5 : 1.2,
+      decay: 0.6,
+      sustain: 0.65,
+      release: settings.isFoggy ? 4 : 2.5,
     },
-    volume: -16,
+    modulation: {
+      type: "sine",
+    },
+    modulationEnvelope: {
+      attack: 1,
+      decay: 0.4,
+      sustain: 0.5,
+      release: 2,
+    },
+    volume: settings.isFoggy ? -22 : -19,
   }).connect(reverb);
 
-  const noiseSynth = new Tone.NoiseSynth({
+  const rainSynth = new Tone.NoiseSynth({
     noise: {
       type: settings.isRainy ? "pink" : "white",
     },
     envelope: {
       attack: 0.001,
-      decay: 0.08,
+      decay: settings.isStormy ? 0.12 : 0.06,
       sustain: 0,
-      release: 0.05,
+      release: 0.04,
     },
-    volume: settings.isStormy ? -12 : -22,
+    volume: settings.isStormy ? -20 : -30,
   }).connect(filter);
+
+  const sparkleSynth = new Tone.MetalSynth({
+    frequency: settings.isSnowy ? 260 : 180,
+    envelope: {
+      attack: 0.001,
+      decay: settings.isSnowy ? 1.2 : 0.45,
+      release: 0.25,
+    },
+    harmonicity: settings.isSnowy ? 7.5 : 4.2,
+    modulationIndex: settings.isSnowy ? 18 : 10,
+    resonance: settings.isSnowy ? 3000 : 1600,
+    octaves: settings.isSnowy ? 1.8 : 1.2,
+    volume: settings.isSnowy ? -22 : -28,
+  }).connect(delay);
 
   let melodyIndex = 0;
   let bassIndex = 0;
+  let sparkleIndex = 0;
 
   const melodyLoop = new Tone.Loop((time) => {
     const step = melodyIndex % settings.scale.length;
     const note = settings.scale[step];
 
     const shouldPlay =
-      settings.isStormy || settings.isRainy
+      settings.isFoggy
+        ? Math.random() > 0.45
+        : settings.isStormy || settings.isRainy
         ? Math.random() > 0.25
-        : Math.random() > 0.1;
+        : Math.random() > 0.12;
 
     if (shouldPlay) {
-      melodySynth.triggerAttackRelease(note, "8n", time);
+      const duration = settings.isFoggy ? "4n" : "8n";
+      melodySynth.triggerAttackRelease(note, duration, time);
     }
 
     melodyIndex += settings.windSpeed > 10 ? 2 : 1;
@@ -144,9 +211,9 @@ function createWeatherMusic(settings, startTime) {
 
   const bassLoop = new Tone.Loop((time) => {
     const note = settings.bassNotes[bassIndex % settings.bassNotes.length];
-    bassSynth.triggerAttackRelease(note, "2n", time);
+    bassSynth.triggerAttackRelease(note, settings.isStormy ? "4n" : "2n", time);
     bassIndex++;
-  }, "1m");
+  }, settings.isStormy ? "2n" : "1m");
 
   const padLoop = new Tone.Loop((time) => {
     const root = settings.scale[0];
@@ -157,43 +224,69 @@ function createWeatherMusic(settings, startTime) {
   }, "2m");
 
   const rainLoop = new Tone.Loop((time) => {
-    if (settings.isRainy || settings.rainIntensity > 0) {
-      if (Math.random() < 0.4 + settings.rainIntensity * 0.5) {
-        noiseSynth.triggerAttackRelease("32n", time);
+    if (settings.isRainy || settings.rainIntensity > 0 || settings.isStormy) {
+      const chance = settings.isStormy
+        ? 0.8
+        : 0.25 + settings.rainIntensity * 0.55;
+
+      if (Math.random() < chance) {
+        rainSynth.triggerAttackRelease("32n", time);
       }
     }
-  }, "16n");
+  }, settings.isStormy ? "16n" : "16n");
 
   const stormLoop = new Tone.Loop((time) => {
-    if (settings.isStormy && Math.random() > 0.65) {
+    if (settings.isStormy && Math.random() > 0.55) {
       bassSynth.triggerAttackRelease(settings.bassNotes[0], "8n", time);
-      noiseSynth.triggerAttackRelease("16n", time);
+      rainSynth.triggerAttackRelease("16n", time);
     }
   }, "2n");
+
+  const sparkleLoop = new Tone.Loop((time) => {
+    if (settings.isSnowy || settings.isClear) {
+      const chance = settings.isSnowy ? 0.45 : 0.18;
+
+      if (Math.random() < chance) {
+        const note = settings.scale[sparkleIndex % settings.scale.length];
+        sparkleSynth.frequency.setValueAtTime(Tone.Frequency(note).toFrequency(), time);
+        sparkleSynth.triggerAttackRelease("16n", time);
+        sparkleIndex += 2;
+      }
+    }
+  }, settings.isSnowy ? "8n" : "2n");
 
   melodyLoop.start(startTime);
   bassLoop.start(startTime);
   padLoop.start(startTime);
   rainLoop.start(startTime);
   stormLoop.start(startTime);
+  sparkleLoop.start(startTime);
 
   gain.gain.setValueAtTime(0, startTime);
-  gain.gain.linearRampToValueAtTime(1, startTime + 0.35);
+  gain.gain.linearRampToValueAtTime(
+  masterVolume,
+  startTime + TRANSITION_TIME
+);
 
   return {
     gain,
+    outputGain,
+    limiter,
     filter,
     reverb,
     delay,
+    chorus,
     melodySynth,
     bassSynth,
     padSynth,
-    noiseSynth,
+    rainSynth,
+    sparkleSynth,
     melodyLoop,
     bassLoop,
     padLoop,
     rainLoop,
     stormLoop,
+    sparkleLoop,
   };
 }
 
@@ -224,11 +317,11 @@ export async function requestWeatherMusicChange(settings) {
     if (oldMusic) {
       oldMusic.gain.gain.cancelScheduledValues(time);
       oldMusic.gain.gain.setValueAtTime(oldMusic.gain.gain.value, time);
-      oldMusic.gain.gain.linearRampToValueAtTime(0, time + 0.35);
+      oldMusic.gain.gain.linearRampToValueAtTime(0, time + TRANSITION_TIME);
 
       setTimeout(() => {
         disposeMusic(oldMusic);
-      }, 500);
+      }, (TRANSITION_TIME + 0.2) * 1000);
     }
 
     pendingSwitchId = null;
@@ -255,7 +348,7 @@ export function stopWeatherMusic() {
       disposeMusic(oldMusic);
       Tone.Transport.stop();
       Tone.Transport.cancel();
-    }, 400);
+    }, 500);
   } else {
     Tone.Transport.stop();
     Tone.Transport.cancel();
