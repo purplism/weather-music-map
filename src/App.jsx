@@ -1,6 +1,7 @@
 import {
   requestWeatherMusicChange,
   stopWeatherMusic,
+  resetWeatherMusic,
   setWeatherMusicVolume,
   unlockWeatherMusicAudio,
 } from "./music";
@@ -119,53 +120,65 @@ function App() {
   }, []);
 
   async function handleMapClick(lat, lon) {
-    const requestId = latestRequestId.current + 1;
-    latestRequestId.current = requestId;
+  const requestId = latestRequestId.current + 1;
+  latestRequestId.current = requestId;
 
-    try {
-      await unlockWeatherMusicAudio();
-    } catch (error) {
-      console.warn("Audio unlock failed:", error);
+  try {
+    await unlockWeatherMusicAudio();
+  } catch (error) {
+    console.warn("Audio unlock failed:", error);
+  }
+
+  setClickedLocation({ lat, lon });
+  setWeather(null);
+  setWeatherError("");
+  setLoadingWeather(true);
+
+  try {
+    const currentWeather = await getWeather(lat, lon);
+
+    if (requestId !== latestRequestId.current) {
+      return;
     }
 
-    setClickedLocation({ lat, lon });
-    setWeather(null);
-    setWeatherError("");
-    setLoadingWeather(true);
+    setWeather(currentWeather);
 
-    try {
-      const currentWeather = await getWeather(lat, lon);
+    const musicSettings = weatherToMusic(currentWeather);
+    console.log("Music settings:", musicSettings);
+    console.log("Weather:", currentWeather);
 
-      if (requestId !== latestRequestId.current) {
-        return;
-      }
+    // Since pause/play reset is working, do the same reset automatically
+    // before starting the next location's music.
+    resetWeatherMusic();
 
-      setWeather(currentWeather);
+    await requestWeatherMusicChange(musicSettings);
 
-      const musicSettings = weatherToMusic(currentWeather);
-      console.log("Music settings:", musicSettings);
-      console.log("Weather:", currentWeather);
+    setIsMusicPlaying(true);
+  } catch (error) {
+    if (requestId !== latestRequestId.current) {
+      return;
+    }
 
-      requestWeatherMusicChange(musicSettings);
-      setIsMusicPlaying(true);
-    } catch (error) {
-      if (requestId !== latestRequestId.current) {
-        return;
-      }
-
-      console.error(error);
-      setWeatherError("Could not load weather for this location.");
-    } finally {
-      if (requestId === latestRequestId.current) {
-        setLoadingWeather(false);
-      }
+    console.error(error);
+    setWeatherError("Could not load weather for this location.");
+    setIsMusicPlaying(false);
+  } finally {
+    if (requestId === latestRequestId.current) {
+      setLoadingWeather(false);
     }
   }
+}
 
   function handleMusicButtonClick() {
     if (isMusicPlaying) {
+      latestRequestId.current += 1;
+
       stopWeatherMusic();
+
       setIsMusicPlaying(false);
+      setLoadingWeather(false);
+      setWeatherError("");
+
       return;
     }
 
@@ -212,7 +225,10 @@ function App() {
         <div className="control-box">
           <h2>Music</h2>
 
-          <button className="music-toggle-button" onClick={handleMusicButtonClick}>
+          <button
+            className="music-toggle-button"
+            onClick={handleMusicButtonClick}
+          >
             {isMusicPlaying ? "❚❚" : "▶"}
           </button>
 
