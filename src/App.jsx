@@ -1,4 +1,4 @@
-import { playWeatherMusic, stopWeatherMusic } from "./music";
+import { requestWeatherMusicChange, stopWeatherMusic } from "./music";
 import { weatherToMusic } from "./weatherToMusic";
 import { useEffect, useState } from "react";
 import {
@@ -18,6 +18,13 @@ const palestineLabelIcon = L.divIcon({
   html: "Palestine",
   iconSize: [90, 28],
   iconAnchor: [45, 14],
+});
+
+const selectedLocationIcon = L.divIcon({
+  className: "selected-location-pin",
+  html: "📍",
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
 });
 
 function ClickHandler({ onMapClick }) {
@@ -103,7 +110,7 @@ function App() {
       console.log("Music settings:", musicSettings);
       console.log("Weather:", currentWeather);
 
-      playWeatherMusic(musicSettings);
+      requestWeatherMusicChange(musicSettings);
       setIsMusicPlaying(true);
     } catch (error) {
       console.error(error);
@@ -233,6 +240,15 @@ function App() {
           interactive={false}
           zIndexOffset={1000}
         />
+        
+        {clickedLocation && (
+  <Marker
+    position={[clickedLocation.lat, clickedLocation.lon]}
+    icon={selectedLocationIcon}
+    interactive={false}
+    zIndexOffset={1200}
+  />
+)}
 
         <ClickHandler onMapClick={handleMapClick} />
       </MapContainer>

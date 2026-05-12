@@ -85,3 +85,23 @@ body {
   background: #2563eb !important;
 }
 
+.palestine-label {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.82);
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.selected-location-pin {
+  font-size: 30px;
+  line-height: 32px;
+  text-align: center;
+  transform: translateY(-2px);
+  pointer-events: none;
+}
