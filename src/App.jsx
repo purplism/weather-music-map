@@ -1,7 +1,13 @@
 import { playWeatherMusic, stopWeatherMusic } from "./music";
 import { weatherToMusic } from "./weatherToMusic";
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, useMapEvents, Marker } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  useMap,
+  useMapEvents,
+  Marker,
+} from "react-leaflet";
 import L from "leaflet";
 import { getWeather } from "./weather";
 import "leaflet/dist/leaflet.css";
@@ -24,6 +30,33 @@ function ClickHandler({ onMapClick }) {
   });
 
   return null;
+}
+
+function RadarLayer({ radarUrl }) {
+  const map = useMap();
+  const [zoom, setZoom] = useState(map.getZoom());
+
+  useMapEvents({
+    zoomend() {
+      setZoom(map.getZoom());
+    },
+  });
+
+  if (!radarUrl || zoom > 7) {
+    return null;
+  }
+
+  return (
+    <TileLayer
+      key="radar-layer"
+      attribution='Radar &copy; RainViewer'
+      url={radarUrl}
+      opacity={0.55}
+      maxZoom={7}
+      maxNativeZoom={7}
+      zIndex={300}
+    />
+  );
 }
 
 function App() {
@@ -163,7 +196,7 @@ function App() {
         center={[20, 0]}
         zoom={2}
         minZoom={2}
-        maxZoom={7}
+        maxZoom={18}
         worldCopyJump={true}
         className="map"
       >
@@ -185,24 +218,14 @@ function App() {
           />
         )}
 
-        {radarUrl && (
-          <TileLayer
-            key="radar-layer"
-            attribution='Radar &copy; RainViewer'
-            url={radarUrl}
-            opacity={0.55}
-            maxZoom={7}
-            maxNativeZoom={7}
-            zIndex={300}
-          />
-        )}
+        <RadarLayer radarUrl={radarUrl} />
 
-         {/* <TileLayer
+        {/* <TileLayer
           key="labels-layer"
           attribution='&copy; OpenStreetMap contributors &copy; CARTO'
           url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
           zIndex={400}
-        /> */} 
+        /> */}
 
         <Marker
           position={[31.8, 35.2]}
