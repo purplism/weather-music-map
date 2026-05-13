@@ -12,7 +12,8 @@ export async function getWeather(lat, lon, signal) {
     `&current=temperature_2m,relative_humidity_2m,precipitation,rain,weather_code,cloud_cover,wind_speed_10m` +
     `&temperature_unit=fahrenheit` +
     `&wind_speed_unit=mph` +
-    `&precipitation_unit=inch`;
+    `&precipitation_unit=inch` +
+    `&timezone=auto`;
 
   const response = await fetch(url, { signal });
 
@@ -22,5 +23,19 @@ export async function getWeather(lat, lon, signal) {
   }
 
   const data = await response.json();
-  return data.current;
+  const localTime = new Intl.DateTimeFormat("en-US", {
+    timeZone: data.timezone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(new Date());
+
+  return {
+    ...data.current,
+    localTime,
+    timezone: data.timezone,
+  };
 }

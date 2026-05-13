@@ -303,7 +303,7 @@ function App() {
               <strong>Rain:</strong> {weather.rain} in
             </p>
             <p>
-              <strong>Weather Code:</strong> {weather.weather_code}
+              <strong>Local Time:</strong> {weather.localTime}
             </p>
           </div>
         )}
