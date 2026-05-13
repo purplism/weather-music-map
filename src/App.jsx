@@ -16,18 +16,27 @@ import {
   AttributionControl,
 } from "react-leaflet";
 import L from "leaflet";
+import { getClickedPlace } from "./location";
 import { getWeather } from "./weather";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
 
 const RADAR_MAX_ZOOM = 7;
-
-const palestineLabelIcon = L.divIcon({
-  className: "palestine-label",
-  html: "Palestine",
-  iconSize: [90, 28],
-  iconAnchor: [45, 14],
-});
+const MUSIC_KEYS = [
+  "C",
+  "C#",
+  "D",
+  "Eb",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "Ab",
+  "A",
+  "Bb",
+  "B",
+];
+const MUSIC_MODES = ["major", "minor"];
 
 const selectedLocationIcon = L.divIcon({
   className: "selected-location-pin",
@@ -89,12 +98,15 @@ function RadarLayer({ radarUrl }) {
 
 function App() {
   const [clickedLocation, setClickedLocation] = useState(null);
+  const [clickedPlace, setClickedPlace] = useState(null);
   const [weather, setWeather] = useState(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [weatherError, setWeatherError] = useState("");
   const [radarUrl, setRadarUrl] = useState("");
   const [mapStyle, setMapStyle] = useState("default");
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [selectedKey, setSelectedKey] = useState("C");
+  const [selectedMode, setSelectedMode] = useState("major");
   const [volume, setVolume] = useState(0.7);
 
   const latestRequestId = useRef(0);
@@ -145,9 +157,22 @@ function App() {
     }
 
     setClickedLocation({ lat, lon });
+    setClickedPlace(null);
     setWeather(null);
     setWeatherError("");
     setLoadingWeather(true);
+
+    getClickedPlace(lat, lon, controller.signal)
+      .then((place) => {
+        if (requestId === latestRequestId.current) {
+          setClickedPlace(place);
+        }
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") {
+          console.error(error);
+        }
+      });
 
     try {
       const currentWeather = await getWeather(lat, lon, controller.signal);
@@ -158,7 +183,11 @@ function App() {
 
       setWeather(currentWeather);
 
-      const musicSettings = weatherToMusic(currentWeather);
+      const musicSettings = weatherToMusic(
+        currentWeather,
+        selectedKey,
+        selectedMode
+      );
       console.log("Music settings:", musicSettings);
       console.log("Weather:", currentWeather);
 
@@ -196,6 +225,7 @@ function App() {
       setIsMusicPlaying(false);
       setLoadingWeather(false);
       setWeatherError("");
+      setClickedPlace(null);
 
       return;
     }
@@ -215,6 +245,38 @@ function App() {
     setVolume(newVolume);
     setWeatherMusicVolume(newVolume);
   }
+
+  async function updateCurrentMusic(nextKey, nextMode) {
+    if (!weather || !isMusicPlaying) {
+      return;
+    }
+
+    const musicSettings = weatherToMusic(weather, nextKey, nextMode);
+
+    try {
+      await requestWeatherMusicChange(musicSettings);
+    } catch (error) {
+      console.error("Could not update music key or mode:", error);
+    }
+  }
+
+  function handleKeyChange(e) {
+    const newKey = e.target.value;
+
+    setSelectedKey(newKey);
+    updateCurrentMusic(newKey, selectedMode);
+  }
+
+  function handleModeChange(e) {
+    const newMode = e.target.value;
+
+    setSelectedMode(newMode);
+    updateCurrentMusic(selectedKey, newMode);
+  }
+
+  const musicTitle = clickedPlace
+    ? `🎵${clickedPlace.municipality}, ${clickedPlace.country}🎵`
+    : "Music";
 
   return (
     <div className="app">
@@ -241,7 +303,7 @@ function App() {
         </div>
 
         <div className="control-box">
-          <h2>Music</h2>
+          <h2>{musicTitle}</h2>
 
           <button
             className="music-toggle-button"
@@ -249,6 +311,32 @@ function App() {
           >
             {isMusicPlaying ? "❚❚" : "▶"}
           </button>
+
+          <label className="select-control" htmlFor="music-key">
+            Key
+            <select id="music-key" value={selectedKey} onChange={handleKeyChange}>
+              {MUSIC_KEYS.map((key) => (
+                <option key={key} value={key}>
+                  {key}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="select-control" htmlFor="music-mode">
+            Mode
+            <select
+              id="music-mode"
+              value={selectedMode}
+              onChange={handleModeChange}
+            >
+              {MUSIC_MODES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {mode[0].toUpperCase() + mode.slice(1)}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <div className="volume-control">
             <label htmlFor="volume-slider">
@@ -344,13 +432,6 @@ function App() {
           url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
           zIndex={400}
         /> */}
-
-        <Marker
-          position={[31.8, 35.2]}
-          icon={palestineLabelIcon}
-          interactive={false}
-          zIndexOffset={1000}
-        />
 
         {clickedLocation && (
           <Marker

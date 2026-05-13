@@ -59,6 +59,7 @@ body {
 .control-box h2 {
   margin-top: 0;
   font-size: 20px;
+  overflow-wrap: anywhere;
 }
 
 .control-box button {
@@ -85,19 +86,6 @@ body {
   background: #2563eb !important;
 }
 
-.palestine-label {
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(17, 24, 39, 0.82);
-  color: white;
-  font-size: 13px;
-  font-weight: 700;
-  text-align: center;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  pointer-events: none;
-}
-
 .selected-location-pin {
   font-size: 30px;
   line-height: 32px;
@@ -108,6 +96,23 @@ body {
 
 .volume-control {
   margin-top: 12px;
+}
+
+.select-control {
+  display: block;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.select-control select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: #374151;
+  color: white;
 }
 
 .volume-control label {

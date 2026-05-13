@@ -9,6 +9,7 @@ let masterVolume = 0.7;
 
 const OUTPUT_GAIN = 1.5;
 const PARAM_TRANSITION_TIME = 0.25;
+const STOP_FADE_TIME = 0.04;
 
 export async function unlockWeatherMusicAudio() {
   await Tone.start();
@@ -22,6 +23,20 @@ export function setWeatherMusicVolume(value) {
   }
 }
 
+function restoreMasterVolume() {
+  if (!engine?.masterGain) return;
+
+  engine.masterGain.gain.cancelScheduledValues(Tone.now());
+  engine.masterGain.gain.rampTo(masterVolume, 0.08);
+}
+
+function silenceMasterVolume() {
+  if (!engine?.masterGain) return;
+
+  engine.masterGain.gain.cancelScheduledValues(Tone.now());
+  engine.masterGain.gain.rampTo(0, STOP_FADE_TIME);
+}
+
 function getSafeSettings(settings) {
   return {
     bpm: settings.bpm ?? 90,
@@ -29,6 +44,7 @@ function getSafeSettings(settings) {
     bassNotes: settings.bassNotes?.length
       ? settings.bassNotes
       : ["C2", "G2", "A2", "G2"],
+    padNotes: settings.padNotes?.length ? settings.padNotes : ["C3", "E3", "G3"],
     brightness: settings.brightness ?? 2000,
     reverbWet: settings.reverbWet ?? 0.3,
     chorusWet: settings.chorusWet ?? 0.2,
@@ -258,11 +274,7 @@ function createEngine() {
 
     const settings = getSafeSettings(activeSettings);
 
-    const root = settings.scale[0];
-    const third = settings.scale[2] ?? settings.scale[1];
-    const fifth = settings.scale[4] ?? settings.scale[3] ?? settings.scale[0];
-
-    padSynth.triggerAttackRelease([root, third, fifth], "2m", time);
+    padSynth.triggerAttackRelease(settings.padNotes, "2m", time);
   }, "2m");
 
   const rainLoop = new Tone.Loop((time) => {
@@ -373,6 +385,7 @@ export async function requestWeatherMusicChange(settings) {
 
   const safeSettings = getSafeSettings(settings);
   ensureEngine();
+  restoreMasterVolume();
 
   if (Tone.Transport.state !== "started") {
     activeSettings = safeSettings;
@@ -412,6 +425,7 @@ export function stopWeatherMusic() {
   }
 
   stopLoops();
+  silenceMasterVolume();
   Tone.Transport.stop();
   Tone.Transport.cancel();
 
