@@ -98,6 +98,7 @@ function App() {
   const [volume, setVolume] = useState(0.7);
 
   const latestRequestId = useRef(0);
+  const weatherAbortController = useRef(null);
 
   useEffect(() => {
     async function loadRadar() {
@@ -119,59 +120,76 @@ function App() {
     loadRadar();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      weatherAbortController.current?.abort();
+    };
+  }, []);
+
   async function handleMapClick(lat, lon) {
-  const requestId = latestRequestId.current + 1;
-  latestRequestId.current = requestId;
+    const requestId = latestRequestId.current + 1;
+    latestRequestId.current = requestId;
 
-  try {
-    await unlockWeatherMusicAudio();
-  } catch (error) {
-    console.warn("Audio unlock failed:", error);
-  }
+    weatherAbortController.current?.abort();
+    const controller = new AbortController();
+    weatherAbortController.current = controller;
 
-  setClickedLocation({ lat, lon });
-  setWeather(null);
-  setWeatherError("");
-  setLoadingWeather(true);
-
-  try {
-    const currentWeather = await getWeather(lat, lon);
+    try {
+      await unlockWeatherMusicAudio();
+    } catch (error) {
+      console.warn("Audio unlock failed:", error);
+    }
 
     if (requestId !== latestRequestId.current) {
       return;
     }
 
-    setWeather(currentWeather);
+    setClickedLocation({ lat, lon });
+    setWeather(null);
+    setWeatherError("");
+    setLoadingWeather(true);
 
-    const musicSettings = weatherToMusic(currentWeather);
-    console.log("Music settings:", musicSettings);
-    console.log("Weather:", currentWeather);
+    try {
+      const currentWeather = await getWeather(lat, lon, controller.signal);
 
-    // Since pause/play reset is working, do the same reset automatically
-    // before starting the next location's music.
-    resetWeatherMusic();
+      if (requestId !== latestRequestId.current) {
+        return;
+      }
 
-    await requestWeatherMusicChange(musicSettings);
+      setWeather(currentWeather);
 
-    setIsMusicPlaying(true);
-  } catch (error) {
-    if (requestId !== latestRequestId.current) {
-      return;
-    }
+      const musicSettings = weatherToMusic(currentWeather);
+      console.log("Music settings:", musicSettings);
+      console.log("Weather:", currentWeather);
 
-    console.error(error);
-    setWeatherError("Could not load weather for this location.");
-    setIsMusicPlaying(false);
-  } finally {
-    if (requestId === latestRequestId.current) {
-      setLoadingWeather(false);
+      // Since pause/play reset is working, do the same reset automatically
+      // before starting the next location's music.
+      resetWeatherMusic();
+
+      await requestWeatherMusicChange(musicSettings);
+
+      setIsMusicPlaying(true);
+    } catch (error) {
+      if (error.name === "AbortError" || requestId !== latestRequestId.current) {
+        return;
+      }
+
+      console.error(error);
+      setWeatherError("Could not load weather for this location.");
+      setIsMusicPlaying(false);
+    } finally {
+      if (requestId === latestRequestId.current) {
+        weatherAbortController.current = null;
+        setLoadingWeather(false);
+      }
     }
   }
-}
 
   function handleMusicButtonClick() {
     if (isMusicPlaying) {
       latestRequestId.current += 1;
+      weatherAbortController.current?.abort();
+      weatherAbortController.current = null;
 
       stopWeatherMusic();
 

@@ -2,7 +2,7 @@ function normalizeLongitude(lon) {
   return ((((lon + 180) % 360) + 360) % 360) - 180;
 }
 
-export async function getWeather(lat, lon) {
+export async function getWeather(lat, lon, signal) {
   const fixedLon = normalizeLongitude(lon);
 
   const url =
@@ -14,7 +14,7 @@ export async function getWeather(lat, lon) {
     `&wind_speed_unit=mph` +
     `&precipitation_unit=inch`;
 
-  const response = await fetch(url);
+  const response = await fetch(url, { signal });
 
   if (!response.ok) {
     console.error("Weather request failed:", url);
