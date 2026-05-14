@@ -45,12 +45,24 @@ function getSafeSettings(settings) {
       ? settings.bassNotes
       : ["C2", "G2", "A2", "G2"],
     padNotes: settings.padNotes?.length ? settings.padNotes : ["C3", "E3", "G3"],
+    padGain: settings.padGain ?? 0,
+    padFilterDepth: settings.padFilterDepth ?? 0,
+    padFilterBaseFrequency: settings.padFilterBaseFrequency ?? 2400,
+    padFilterOctaves: settings.padFilterOctaves ?? 0.25,
+    padFilterFrequency: settings.padFilterFrequency ?? 0.08,
     brightness: settings.brightness ?? 2000,
     reverbWet: settings.reverbWet ?? 0.3,
     chorusWet: settings.chorusWet ?? 0.2,
     delayWet: settings.delayWet ?? 0.2,
     delayFeedback: settings.delayFeedback ?? 0.2,
+    distortionWet: settings.distortionWet ?? 0,
+    melodyRelease: settings.melodyRelease ?? 0.8,
     rainIntensity: settings.rainIntensity ?? 0,
+    lowPressurePercussion: settings.lowPressurePercussion ?? 0,
+    highPressureDryness: settings.highPressureDryness ?? 0,
+    melodyArpLength: settings.melodyArpLength ?? 3,
+    melodySixteenthChance: settings.melodySixteenthChance ?? 0,
+    melodyOctaveChance: settings.melodyOctaveChance ?? 0,
     windSpeed: settings.windSpeed ?? 0,
     isRainy: settings.isRainy ?? false,
     isStormy: settings.isStormy ?? false,
@@ -85,9 +97,53 @@ function updateEffectParameters(settings, time) {
     endTime
   );
 
+  engine.distortion.wet.cancelScheduledValues(time);
+  engine.distortion.wet.setValueAtTime(engine.distortion.wet.value, time);
+  engine.distortion.wet.linearRampToValueAtTime(safe.distortionWet, endTime);
+
   engine.chorus.wet.cancelScheduledValues(time);
   engine.chorus.wet.setValueAtTime(engine.chorus.wet.value, time);
   engine.chorus.wet.linearRampToValueAtTime(safe.chorusWet, endTime);
+
+  engine.melodySynth.envelope.release = safe.melodyRelease;
+  engine.melodySynth.modulationEnvelope.release = safe.melodyRelease * 0.85;
+
+  engine.padGain.gain.cancelScheduledValues(time);
+  engine.padGain.gain.setValueAtTime(engine.padGain.gain.value, time);
+  engine.padGain.gain.linearRampToValueAtTime(safe.padGain, endTime);
+
+  engine.padAutoFilter.depth.cancelScheduledValues(time);
+  engine.padAutoFilter.depth.setValueAtTime(
+    engine.padAutoFilter.depth.value,
+    time
+  );
+  engine.padAutoFilter.depth.linearRampToValueAtTime(
+    safe.padFilterDepth,
+    endTime
+  );
+
+  engine.padAutoFilter.frequency.cancelScheduledValues(time);
+  engine.padAutoFilter.frequency.setValueAtTime(
+    engine.padAutoFilter.frequency.value,
+    time
+  );
+  engine.padAutoFilter.frequency.linearRampToValueAtTime(
+    safe.padFilterFrequency,
+    endTime
+  );
+
+  engine.padAutoFilter.baseFrequency = safe.padFilterBaseFrequency;
+  engine.padAutoFilter.octaves = safe.padFilterOctaves;
+}
+
+function transposeNoteByOctave(note) {
+  const match = /^([A-G](?:#|b)?)(-?\d+)$/.exec(note);
+
+  if (!match) {
+    return note;
+  }
+
+  return `${match[1]}${Number(match[2]) + 1}`;
 }
 
 function createEngine() {
@@ -112,12 +168,17 @@ function createEngine() {
     wet: 0.2,
   }).connect(reverb);
 
+  const distortion = new Tone.Distortion({
+    distortion: 0.32,
+    wet: 0,
+  }).connect(delay);
+
   const chorus = new Tone.Chorus({
     frequency: 1.2,
     delayTime: 3.5,
     depth: 0.4,
     wet: 0.2,
-  }).connect(delay);
+  }).connect(distortion);
 
   chorus.start();
 
@@ -128,7 +189,7 @@ function createEngine() {
       type: "sine",
     },
     envelope: {
-      attack: 0.02,
+      attack: 0.004,
       decay: 0.25,
       sustain: 0.18,
       release: 0.8,
@@ -137,7 +198,7 @@ function createEngine() {
       type: "sine",
     },
     modulationEnvelope: {
-      attack: 0.04,
+      attack: 0.006,
       decay: 0.2,
       sustain: 0.15,
       release: 0.7,
@@ -171,6 +232,22 @@ function createEngine() {
     volume: -15,
   }).connect(reverb);
 
+  const padAutoFilter = new Tone.AutoFilter({
+    frequency: 0.08,
+    baseFrequency: 2400,
+    octaves: 0.25,
+    depth: 0,
+    filter: {
+      type: "lowpass",
+      rolloff: -12,
+      Q: 1,
+    },
+  }).connect(reverb);
+
+  padAutoFilter.start();
+
+  const padGain = new Tone.Gain(0).connect(padAutoFilter);
+
   const padSynth = new Tone.PolySynth(Tone.AMSynth, {
     harmonicity: 1.3,
     oscillator: {
@@ -191,8 +268,8 @@ function createEngine() {
       sustain: 0.5,
       release: 2,
     },
-    volume: -21,
-  }).connect(reverb);
+    volume: 0,
+  }).connect(padGain);
 
   const rainSynth = new Tone.NoiseSynth({
     noise: {
@@ -204,7 +281,7 @@ function createEngine() {
       sustain: 0,
       release: 0.04,
     },
-    volume: -30,
+    volume: -24,
   }).connect(filter);
 
   const sparkleSynth = new Tone.MetalSynth({
@@ -218,7 +295,7 @@ function createEngine() {
     modulationIndex: 12,
     resonance: 1800,
     octaves: 1.4,
-    volume: -27,
+    volume: -24,
   }).connect(delay);
 
   let melodyIndex = 0;
@@ -231,7 +308,6 @@ function createEngine() {
     if (!activeSettings) return;
 
     const settings = getSafeSettings(activeSettings);
-    const note = settings.scale[melodyIndex % settings.scale.length];
 
     const shouldSkipForSlowWind = settings.windSpeed <= 12 && melodyStep % 2 === 1;
     melodyStep++;
@@ -246,7 +322,24 @@ function createEngine() {
 
     if (Math.random() < chance) {
       const duration = settings.isFoggy ? "4n" : "8n";
-      melodySynth.triggerAttackRelease(note, duration, time);
+      const arpLength = Math.max(3, Math.round(settings.melodyArpLength));
+      const step = Math.max(1, settings.windSpeed > 10 ? 2 : 1);
+      let noteTime = time;
+
+      for (let i = 0; i < arpLength; i += 1) {
+        const sourceNote = settings.scale[
+          (melodyIndex + i * step) % settings.scale.length
+        ];
+        const arpNote =
+          Math.random() < settings.melodyOctaveChance
+            ? transposeNoteByOctave(sourceNote)
+            : sourceNote;
+
+        melodySynth.triggerAttackRelease(arpNote, duration, noteTime);
+
+        const useSixteenth = Math.random() < settings.melodySixteenthChance;
+        noteTime += Tone.Time(useSixteenth ? "16n" : "8n").toSeconds();
+      }
     }
 
     melodyIndex += settings.windSpeed > 10 ? 2 : 1;
@@ -283,9 +376,18 @@ function createEngine() {
     const settings = getSafeSettings(activeSettings);
 
     if (settings.isRainy || settings.rainIntensity > 0 || settings.isStormy) {
-      const chance = settings.isStormy
-        ? 0.8
-        : 0.25 + settings.rainIntensity * 0.55;
+      const baseChance = settings.isStormy
+        ? 0.78
+        : 0.2 + settings.rainIntensity * 0.5;
+      const chance = Math.max(
+        0,
+        Math.min(
+          0.95,
+          baseChance +
+            settings.lowPressurePercussion * 0.4 -
+            settings.highPressureDryness * 0.3
+        )
+      );
 
       if (Math.random() < chance) {
         rainSynth.triggerAttackRelease("32n", time);
@@ -298,7 +400,20 @@ function createEngine() {
 
     const settings = getSafeSettings(activeSettings);
 
-    if (settings.isStormy && Math.random() > 0.55) {
+    const accentChance = Math.max(
+      0.18,
+      Math.min(
+        0.72,
+        0.45 +
+          settings.lowPressurePercussion * 0.35 -
+          settings.highPressureDryness * 0.28
+      )
+    );
+
+    if (
+      (settings.isStormy || settings.lowPressurePercussion > 0.45) &&
+      Math.random() < accentChance
+    ) {
       bassSynth.triggerAttackRelease(settings.bassNotes[0], "8n", time);
       rainSynth.triggerAttackRelease("16n", time);
     }
@@ -331,7 +446,10 @@ function createEngine() {
     filter,
     reverb,
     delay,
+    distortion,
     chorus,
+    padGain,
+    padAutoFilter,
     melodySynth,
     bassSynth,
     padSynth,

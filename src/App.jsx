@@ -355,18 +355,7 @@ function App() {
           </div>
         </div>
 
-        {clickedLocation ? (
-          <div className="location-box">
-            <p>
-              <strong>Latitude:</strong> {clickedLocation.lat.toFixed(4)}
-            </p>
-            <p>
-              <strong>Longitude:</strong> {clickedLocation.lon.toFixed(4)}
-            </p>
-          </div>
-        ) : (
-          <p>No location selected yet.</p>
-        )}
+        {!clickedLocation && <p>No location selected yet.</p>}
 
         {loadingWeather && <p>Loading weather...</p>}
 
@@ -388,11 +377,24 @@ function App() {
               <strong>Wind Speed:</strong> {weather.wind_speed_10m} mph
             </p>
             <p>
+              <strong>Pressure:</strong> {weather.pressure_msl} hPa
+            </p>
+            <p>
               <strong>Rain:</strong> {weather.rain} in
             </p>
             <p>
               <strong>Local Time:</strong> {weather.localTime}
             </p>
+            {clickedLocation && (
+              <>
+                <p>
+                  <strong>Latitude:</strong> {clickedLocation.lat.toFixed(4)}
+                </p>
+                <p>
+                  <strong>Longitude:</strong> {clickedLocation.lon.toFixed(4)}
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>

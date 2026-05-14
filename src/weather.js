@@ -9,7 +9,7 @@ export async function getWeather(lat, lon, signal) {
     `https://api.open-meteo.com/v1/forecast` +
     `?latitude=${lat}` +
     `&longitude=${fixedLon}` +
-    `&current=temperature_2m,relative_humidity_2m,precipitation,rain,weather_code,cloud_cover,wind_speed_10m` +
+    `&current=temperature_2m,relative_humidity_2m,precipitation,rain,weather_code,cloud_cover,wind_speed_10m,pressure_msl` +
     `&temperature_unit=fahrenheit` +
     `&wind_speed_unit=mph` +
     `&precipitation_unit=inch` +
