@@ -117,6 +117,7 @@ function App() {
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [weatherError, setWeatherError] = useState("");
   const [radarFrames, setRadarFrames] = useState([]);
+  const [radarError, setRadarError] = useState(false);
   const [selectedRadarFrameIndex, setSelectedRadarFrameIndex] = useState(0);
   const [mapStyle, setMapStyle] = useState("default");
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
@@ -135,6 +136,11 @@ function App() {
     selectedRadarFrame,
     selectedRadarFrameIndex === radarFrames.length - 1
   );
+  const radarControlLabel = radarError
+    ? "Unavailable"
+    : radarFrames.length > 0
+    ? selectedRadarTime
+    : "Loading...";
 
   useEffect(() => {
     async function refreshRadar() {
@@ -169,9 +175,13 @@ function App() {
         selectedRadarFrameIndexRef.current = nextFrameIndex;
 
         setRadarFrames(nextRadarFrames);
+        setRadarError(false);
         setSelectedRadarFrameIndex(nextFrameIndex);
       } catch (error) {
         console.error("Could not load radar:", error);
+        if (radarFrameCount.current === 0) {
+          setRadarError(true);
+        }
       }
     }
 
@@ -362,24 +372,23 @@ function App() {
             Satellite
           </button>
 
-          {radarFrames.length > 0 && (
-            <div className="volume-control">
-              <label htmlFor="radar-time-slider">
-                Radar: {selectedRadarTime}
-              </label>
+          <div className="volume-control">
+            <label htmlFor="radar-time-slider">
+              Radar: {radarControlLabel}
+            </label>
 
-              <input
-                id="radar-time-slider"
-                type="range"
-                min="0"
-                max={radarFrames.length - 1}
-                step="1"
-                value={selectedRadarFrameIndex}
-                onChange={handleRadarFrameChange}
-                onInput={handleRadarFrameChange}
-              />
-            </div>
-          )}
+            <input
+              id="radar-time-slider"
+              type="range"
+              min="0"
+              max={Math.max(0, radarFrames.length - 1)}
+              step="1"
+              value={selectedRadarFrameIndex}
+              onChange={handleRadarFrameChange}
+              onInput={handleRadarFrameChange}
+              disabled={radarFrames.length === 0}
+            />
+          </div>
         </div>
 
         <div className="control-box">
