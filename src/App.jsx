@@ -22,6 +22,7 @@ import "leaflet/dist/leaflet.css";
 import "./App.css";
 
 const RADAR_MAX_ZOOM = 7;
+const RADAR_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const MUSIC_KEYS = [
   "C",
   "C#",
@@ -111,9 +112,10 @@ function App() {
 
   const latestRequestId = useRef(0);
   const weatherAbortController = useRef(null);
+  const latestRadarPath = useRef("");
 
   useEffect(() => {
-    async function loadRadar() {
+    async function refreshRadar() {
       try {
         const response = await fetch(
           "https://api.rainviewer.com/public/weather-maps.json"
@@ -121,6 +123,11 @@ function App() {
 
         const data = await response.json();
         const latestRadarFrame = data.radar.past[data.radar.past.length - 1];
+        if (!latestRadarFrame || latestRadarFrame.path === latestRadarPath.current) {
+          return;
+        }
+
+        latestRadarPath.current = latestRadarFrame.path;
         const url = `${data.host}${latestRadarFrame.path}/256/{z}/{x}/{y}/2/1_1.png`;
 
         setRadarUrl(url);
@@ -129,7 +136,15 @@ function App() {
       }
     }
 
-    loadRadar();
+    refreshRadar();
+    const radarRefreshId = window.setInterval(
+      refreshRadar,
+      RADAR_REFRESH_INTERVAL_MS
+    );
+
+    return () => {
+      window.clearInterval(radarRefreshId);
+    };
   }, []);
 
   useEffect(() => {

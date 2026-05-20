@@ -55,6 +55,15 @@ function noteFromKey(key, octave, interval) {
   return noteFromAbsoluteSemitone(octave * 12 + rootSemitone + interval);
 }
 
+function noteFromScaleDegree(key, mode, octave, degree) {
+  const intervals = MODE_INTERVALS[mode] ?? MODE_INTERVALS.major;
+  const octaveOffset = Math.floor(degree / intervals.length);
+  const interval =
+    intervals[((degree % intervals.length) + intervals.length) % intervals.length];
+
+  return noteFromKey(key, octave + octaveOffset, interval);
+}
+
 function parseNote(note) {
   const match = /^([A-G](?:#|b)?)(-?\d+)$/.exec(note);
 
@@ -123,19 +132,44 @@ function buildBassNotes(key, mode, isStormy) {
 }
 
 function buildPadNotes(key, mode, inversionCount) {
-  const intervals = MODE_INTERVALS[mode] ?? MODE_INTERVALS.major;
-  const notes = [
-    noteFromKey(key, 3, 0),
-    noteFromKey(key, 3, intervals[2]),
-    noteFromKey(key, 3, intervals[4]),
-  ];
+  return applyPadInversion(
+    [
+      noteFromScaleDegree(key, mode, 3, 0),
+      noteFromScaleDegree(key, mode, 3, 2),
+      noteFromScaleDegree(key, mode, 3, 4),
+    ],
+    inversionCount
+  );
+}
+
+function applyPadInversion(notes, inversionCount) {
+  const invertedNotes = [...notes];
 
   for (let i = 0; i < inversionCount; i += 1) {
-    const note = notes.shift();
-    notes.push(transposeNote(note, 12));
+    const note = invertedNotes.shift();
+    invertedNotes.push(transposeNote(note, 12));
   }
 
-  return notes;
+  return invertedNotes;
+}
+
+function buildDiatonicTriad(key, mode, rootDegree, inversionCount) {
+  return applyPadInversion(
+    [
+      noteFromScaleDegree(key, mode, 3, rootDegree),
+      noteFromScaleDegree(key, mode, 3, rootDegree + 2),
+      noteFromScaleDegree(key, mode, 3, rootDegree + 4),
+    ],
+    inversionCount
+  );
+}
+
+function buildPadChordProgression(key, mode, inversionCount) {
+  const rootDegrees = mode === "minor" ? [0, 6, 5, 4, 3] : [0, 4, 5, 3, 1];
+
+  return rootDegrees.map((degree) =>
+    buildDiatonicTriad(key, mode, degree, inversionCount)
+  );
 }
 
 function dbToGain(db) {
@@ -222,8 +256,13 @@ export function weatherToMusic(weather, selectedKey = "C", selectedMode = "major
   const bassNotes = buildBassNotes(selectedKey, selectedMode, isStormy);
   const padInversion = Math.floor(getTemperatureRegisterIndex(temperature) / 2);
   const padNotes = buildPadNotes(selectedKey, selectedMode, padInversion);
+  const padChordProgression = buildPadChordProgression(
+    selectedKey,
+    selectedMode,
+    padInversion
+  );
 
-  const brightness = Math.max(2200, 6500 - cloudCover * 35);
+  const brightness = Math.max(3000, 20000 - cloudCover * 170);
   const humidityAmount = clamp(humidity / 100, 0, 1);
 
   const reverbWet = 0.08 + humidityAmount * 0.28;
@@ -267,6 +306,7 @@ export function weatherToMusic(weather, selectedKey = "C", selectedMode = "major
     bassNotes,
     padInversion,
     padNotes,
+    padChordProgression,
     padGain,
     padVolumeDb,
     padFilterDepth,

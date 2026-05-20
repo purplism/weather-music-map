@@ -10,7 +10,8 @@ let masterVolume = 0.7;
 const OUTPUT_GAIN = 1.5;
 const PARAM_TRANSITION_TIME = 0.25;
 const STOP_FADE_TIME = 0.04;
-
+const USE_GLOBAL_FILTER = true;
+const USE_PAD_FILTER = true;
 export async function unlockWeatherMusicAudio() {
   await Tone.start();
 }
@@ -45,6 +46,9 @@ function getSafeSettings(settings) {
       ? settings.bassNotes
       : ["C2", "G2", "A2", "G2"],
     padNotes: settings.padNotes?.length ? settings.padNotes : ["C3", "E3", "G3"],
+    padChordProgression: settings.padChordProgression?.length
+      ? settings.padChordProgression
+      : [settings.padNotes?.length ? settings.padNotes : ["C3", "E3", "G3"]],
     padGain: settings.padGain ?? 0,
     padFilterDepth: settings.padFilterDepth ?? 0,
     padFilterBaseFrequency: settings.padFilterBaseFrequency ?? 2400,
@@ -78,9 +82,11 @@ function updateEffectParameters(settings, time) {
   const safe = getSafeSettings(settings);
   const endTime = time + PARAM_TRANSITION_TIME;
 
-  engine.filter.frequency.cancelScheduledValues(time);
-  engine.filter.frequency.setValueAtTime(engine.filter.frequency.value, time);
-  engine.filter.frequency.linearRampToValueAtTime(safe.brightness, endTime);
+  if (USE_GLOBAL_FILTER) {
+    engine.filter.frequency.cancelScheduledValues(time);
+    engine.filter.frequency.setValueAtTime(engine.filter.frequency.value, time);
+    engine.filter.frequency.linearRampToValueAtTime(safe.brightness, endTime);
+  }
 
   engine.reverb.wet.cancelScheduledValues(time);
   engine.reverb.wet.setValueAtTime(engine.reverb.wet.value, time);
@@ -112,28 +118,30 @@ function updateEffectParameters(settings, time) {
   engine.padGain.gain.setValueAtTime(engine.padGain.gain.value, time);
   engine.padGain.gain.linearRampToValueAtTime(safe.padGain, endTime);
 
-  engine.padAutoFilter.depth.cancelScheduledValues(time);
-  engine.padAutoFilter.depth.setValueAtTime(
-    engine.padAutoFilter.depth.value,
-    time
-  );
-  engine.padAutoFilter.depth.linearRampToValueAtTime(
-    safe.padFilterDepth,
-    endTime
-  );
+  if (USE_PAD_FILTER) {
+    engine.padAutoFilter.depth.cancelScheduledValues(time);
+    engine.padAutoFilter.depth.setValueAtTime(
+      engine.padAutoFilter.depth.value,
+      time
+    );
+    engine.padAutoFilter.depth.linearRampToValueAtTime(
+      safe.padFilterDepth,
+      endTime
+    );
 
-  engine.padAutoFilter.frequency.cancelScheduledValues(time);
-  engine.padAutoFilter.frequency.setValueAtTime(
-    engine.padAutoFilter.frequency.value,
-    time
-  );
-  engine.padAutoFilter.frequency.linearRampToValueAtTime(
-    safe.padFilterFrequency,
-    endTime
-  );
+    engine.padAutoFilter.frequency.cancelScheduledValues(time);
+    engine.padAutoFilter.frequency.setValueAtTime(
+      engine.padAutoFilter.frequency.value,
+      time
+    );
+    engine.padAutoFilter.frequency.linearRampToValueAtTime(
+      safe.padFilterFrequency,
+      endTime
+    );
 
-  engine.padAutoFilter.baseFrequency = safe.padFilterBaseFrequency;
-  engine.padAutoFilter.octaves = safe.padFilterOctaves;
+    engine.padAutoFilter.baseFrequency = safe.padFilterBaseFrequency;
+    engine.padAutoFilter.octaves = safe.padFilterOctaves;
+  }
 }
 
 function transposeNoteByOctave(note) {
@@ -155,12 +163,17 @@ function createEngine() {
     frequency: 2000,
     type: "lowpass",
     rolloff: -24,
-  }).connect(outputGain);
+  });
+  const sharedOutput = USE_GLOBAL_FILTER ? filter : outputGain;
+
+  if (USE_GLOBAL_FILTER) {
+    filter.connect(outputGain);
+  }
 
   const reverb = new Tone.Reverb({
     decay: 4,
     wet: 0.3,
-  }).connect(filter);
+  }).connect(sharedOutput);
 
   const delay = new Tone.FeedbackDelay({
     delayTime: "8n",
@@ -230,7 +243,21 @@ function createEngine() {
       octaves: 2,
     },
     volume: -15,
-  }).connect(reverb);
+  }).connect(outputGain);
+
+  const padReverb = new Tone.Reverb({
+    decay: 4,
+    wet: 0.5,
+  }).connect(sharedOutput);
+
+  const padChorus = new Tone.Chorus({
+    frequency: 1.2,
+    delayTime: 3.5,
+    depth: 0.4,
+    wet: 0.25,
+  }).connect(padReverb);
+
+  padChorus.start();
 
   const padAutoFilter = new Tone.AutoFilter({
     frequency: 0.08,
@@ -242,11 +269,17 @@ function createEngine() {
       rolloff: -12,
       Q: 1,
     },
-  }).connect(reverb);
+  });
+
+  if (USE_PAD_FILTER) {
+    padAutoFilter.connect(padChorus);
+  }
 
   padAutoFilter.start();
 
-  const padGain = new Tone.Gain(0).connect(padAutoFilter);
+  const padGain = new Tone.Gain(0).connect(
+    USE_PAD_FILTER ? padAutoFilter : padChorus
+  );
 
   const padSynth = new Tone.PolySynth(Tone.AMSynth, {
     harmonicity: 1.3,
@@ -282,7 +315,7 @@ function createEngine() {
       release: 0.04,
     },
     volume: -24,
-  }).connect(filter);
+  }).connect(sharedOutput);
 
   const sparkleSynth = new Tone.MetalSynth({
     frequency: 220,
@@ -298,11 +331,57 @@ function createEngine() {
     volume: -24,
   }).connect(delay);
 
+  /*
+  const kickSynth = new Tone.MembraneSynth({
+    pitchDecay: 0.035,
+    octaves: 5.5,
+    oscillator: {
+      type: "sine",
+    },
+    envelope: {
+      attack: 0.001,
+      decay: 0.22,
+      sustain: 0,
+      release: 0.08,
+    },
+    volume: -18,
+  }).connect(outputGain);
+
+  const snareSynth = new Tone.NoiseSynth({
+    noise: {
+      type: "white",
+    },
+    envelope: {
+      attack: 0.001,
+      decay: 0.09,
+      sustain: 0,
+      release: 0.04,
+    },
+    volume: -26,
+  }).connect(outputGain);
+
+  const hatSynth = new Tone.MetalSynth({
+    frequency: 260,
+    envelope: {
+      attack: 0.001,
+      decay: 0.045,
+      release: 0.015,
+    },
+    harmonicity: 4.2,
+    modulationIndex: 16,
+    resonance: 4500,
+    octaves: 0.55,
+    volume: -31,
+  }).connect(outputGain);
+  */
+
   let melodyIndex = 0;
   let bassIndex = 0;
   let sparkleIndex = 0;
   let bassStep = 0;
   let melodyStep = 0;
+  let padChordIndex = 0;
+  /* let drumStep = 0; */
 
   const melodyLoop = new Tone.Loop((time) => {
     if (!activeSettings) return;
@@ -367,7 +446,13 @@ function createEngine() {
 
     const settings = getSafeSettings(activeSettings);
 
-    padSynth.triggerAttackRelease(settings.padNotes, "2m", time);
+    const chord =
+      settings.padChordProgression[
+        padChordIndex % settings.padChordProgression.length
+      ];
+
+    padSynth.triggerAttackRelease(chord, "2m", time);
+    padChordIndex += 1;
   }, "2m");
 
   const rainLoop = new Tone.Loop((time) => {
@@ -419,6 +504,39 @@ function createEngine() {
     }
   }, "2n");
 
+  /*
+  const drumLoop = new Tone.Loop((time) => {
+    if (!activeSettings) return;
+
+    const settings = getSafeSettings(activeSettings);
+    const step = drumStep % 16;
+    const lowPressure = settings.lowPressurePercussion;
+    const windAmount = Math.min(1, settings.windSpeed / 35);
+
+    if ([0, 6, 10].includes(step)) {
+      kickSynth.triggerAttackRelease(step === 6 ? "G1" : "C1", "16n", time);
+    }
+
+    if (step === 4 || step === 12) {
+      snareSynth.volume.value = -24;
+      snareSynth.triggerAttackRelease("16n", time);
+    } else if (
+      (step === 3 || step === 11 || step === 15) &&
+      Math.random() < lowPressure * 0.55
+    ) {
+      snareSynth.volume.value = -34;
+      snareSynth.triggerAttackRelease("32n", time);
+    }
+
+    if (step % 2 === 0 || Math.random() < windAmount * 0.55) {
+      hatSynth.volume.value = step % 4 === 0 ? -29 : -34;
+      hatSynth.triggerAttackRelease("32n", time);
+    }
+
+    drumStep += 1;
+  }, "16n");
+  */
+
   const sparkleLoop = new Tone.Loop((time) => {
     if (!activeSettings) return;
 
@@ -448,6 +566,8 @@ function createEngine() {
     delay,
     distortion,
     chorus,
+    padReverb,
+    padChorus,
     padGain,
     padAutoFilter,
     melodySynth,
@@ -455,11 +575,17 @@ function createEngine() {
     padSynth,
     rainSynth,
     sparkleSynth,
+    /*
+    kickSynth,
+    snareSynth,
+    hatSynth,
+    */
     melodyLoop,
     bassLoop,
     padLoop,
     rainLoop,
     stormLoop,
+    /* drumLoop, */
     sparkleLoop,
   };
 }
@@ -480,6 +606,7 @@ function startLoops(startTime) {
   engine.padLoop.start(startTime);
   engine.rainLoop.start(startTime);
   engine.stormLoop.start(startTime);
+  /* engine.drumLoop.start(startTime); */
   engine.sparkleLoop.start(startTime);
 
   isEnginePlaying = true;
@@ -493,6 +620,7 @@ function stopLoops() {
   engine.padLoop.stop();
   engine.rainLoop.stop();
   engine.stormLoop.stop();
+  /* engine.drumLoop.stop(); */
   engine.sparkleLoop.stop();
 
   isEnginePlaying = false;
