@@ -97,13 +97,27 @@ function RadarLayer({ radarUrl }) {
   );
 }
 
+function formatRadarTime(frame, isLatest) {
+  if (!frame) {
+    return "Unavailable";
+  }
+
+  const time = new Date(frame.time * 1000).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return isLatest ? `Latest (${time})` : time;
+}
+
 function App() {
   const [clickedLocation, setClickedLocation] = useState(null);
   const [clickedPlace, setClickedPlace] = useState(null);
   const [weather, setWeather] = useState(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [weatherError, setWeatherError] = useState("");
-  const [radarUrl, setRadarUrl] = useState("");
+  const [radarFrames, setRadarFrames] = useState([]);
+  const [selectedRadarFrameIndex, setSelectedRadarFrameIndex] = useState(0);
   const [mapStyle, setMapStyle] = useState("default");
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
   const [selectedKey, setSelectedKey] = useState("C");
@@ -113,6 +127,14 @@ function App() {
   const latestRequestId = useRef(0);
   const weatherAbortController = useRef(null);
   const latestRadarPath = useRef("");
+  const radarFrameCount = useRef(0);
+  const selectedRadarFrameIndexRef = useRef(0);
+
+  const selectedRadarFrame = radarFrames[selectedRadarFrameIndex];
+  const selectedRadarTime = formatRadarTime(
+    selectedRadarFrame,
+    selectedRadarFrameIndex === radarFrames.length - 1
+  );
 
   useEffect(() => {
     async function refreshRadar() {
@@ -122,15 +144,32 @@ function App() {
         );
 
         const data = await response.json();
-        const latestRadarFrame = data.radar.past[data.radar.past.length - 1];
+        const frames = data.radar.past ?? [];
+        const latestRadarFrame = frames[frames.length - 1];
         if (!latestRadarFrame || latestRadarFrame.path === latestRadarPath.current) {
           return;
         }
 
-        latestRadarPath.current = latestRadarFrame.path;
-        const url = `${data.host}${latestRadarFrame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+        const wasViewingLatest =
+          radarFrameCount.current === 0 ||
+          selectedRadarFrameIndexRef.current >= radarFrameCount.current - 1;
+        const nextRadarFrames = frames.map((frame) => ({
+          ...frame,
+          url: `${data.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`,
+        }));
+        const nextFrameIndex = wasViewingLatest
+          ? nextRadarFrames.length - 1
+          : Math.min(
+              selectedRadarFrameIndexRef.current,
+              nextRadarFrames.length - 1
+            );
 
-        setRadarUrl(url);
+        latestRadarPath.current = latestRadarFrame.path;
+        radarFrameCount.current = nextRadarFrames.length;
+        selectedRadarFrameIndexRef.current = nextFrameIndex;
+
+        setRadarFrames(nextRadarFrames);
+        setSelectedRadarFrameIndex(nextFrameIndex);
       } catch (error) {
         console.error("Could not load radar:", error);
       }
@@ -261,6 +300,13 @@ function App() {
     setWeatherMusicVolume(newVolume);
   }
 
+  function handleRadarFrameChange(e) {
+    const nextFrameIndex = Number(e.target.value);
+
+    selectedRadarFrameIndexRef.current = nextFrameIndex;
+    setSelectedRadarFrameIndex(nextFrameIndex);
+  }
+
   async function updateCurrentMusic(nextKey, nextMode) {
     if (!weather || !isMusicPlaying) {
       return;
@@ -315,6 +361,25 @@ function App() {
           >
             Satellite
           </button>
+
+          {radarFrames.length > 0 && (
+            <div className="volume-control">
+              <label htmlFor="radar-time-slider">
+                Radar: {selectedRadarTime}
+              </label>
+
+              <input
+                id="radar-time-slider"
+                type="range"
+                min="0"
+                max={radarFrames.length - 1}
+                step="1"
+                value={selectedRadarFrameIndex}
+                onChange={handleRadarFrameChange}
+                onInput={handleRadarFrameChange}
+              />
+            </div>
+          )}
         </div>
 
         <div className="control-box">
@@ -441,7 +506,7 @@ function App() {
           />
         )}
 
-        <RadarLayer radarUrl={radarUrl} />
+        <RadarLayer radarUrl={selectedRadarFrame?.url ?? ""} />
 
         {/* <TileLayer
           key="labels-layer"
