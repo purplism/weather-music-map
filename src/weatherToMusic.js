@@ -42,11 +42,20 @@ const MODE_INTERVALS = {
   minor: [0, 2, 3, 5, 7, 8, 10],
 };
 
+const EDO_53_MODE_STEPS = {
+  major: [0, 9, 17, 22, 31, 39, 48],
+  minor: [0, 9, 14, 22, 31, 36, 45],
+};
+
 function noteFromAbsoluteSemitone(absoluteSemitone) {
   const octave = Math.floor(absoluteSemitone / 12);
   const semitone = ((absoluteSemitone % 12) + 12) % 12;
 
   return `${SEMITONE_TO_NOTE[semitone]}${octave}`;
+}
+
+function frequencyFrom53EdoStep(baseFrequency, step) {
+  return baseFrequency * Math.pow(2, step / 53);
 }
 
 function noteFromKey(key, octave, interval) {
@@ -172,6 +181,53 @@ function buildPadChordProgression(key, mode, inversionCount) {
   );
 }
 
+function build53EdoScale(baseFrequency, mode, startOctave, noteCount) {
+  const steps = EDO_53_MODE_STEPS[mode] ?? EDO_53_MODE_STEPS.major;
+  const frequencies = [];
+
+  for (let octave = startOctave; frequencies.length < noteCount; octave += 1) {
+    steps.forEach((step) => {
+      if (frequencies.length < noteCount) {
+        frequencies.push(frequencyFrom53EdoStep(baseFrequency, step + octave * 53));
+      }
+    });
+  }
+
+  return frequencies;
+}
+
+function build53EdoTriad(baseFrequency, mode, rootDegree, inversionCount) {
+  const steps = EDO_53_MODE_STEPS[mode] ?? EDO_53_MODE_STEPS.major;
+  const chord = [0, 2, 4].map((degreeOffset) => {
+    const degree = rootDegree + degreeOffset;
+    const octaveOffset = Math.floor(degree / steps.length);
+    const step = steps[((degree % steps.length) + steps.length) % steps.length];
+
+    return frequencyFrom53EdoStep(baseFrequency, step + octaveOffset * 53);
+  });
+
+  return applyFrequencyInversion(chord, inversionCount);
+}
+
+function build53EdoPadChordProgression(baseFrequency, mode, inversionCount) {
+  const rootDegrees = mode === "minor" ? [0, 6, 5, 4, 3] : [0, 4, 5, 3, 1];
+
+  return rootDegrees.map((degree) =>
+    build53EdoTriad(baseFrequency * 2, mode, degree, inversionCount)
+  );
+}
+
+function applyFrequencyInversion(frequencies, inversionCount) {
+  const invertedFrequencies = [...frequencies];
+
+  for (let i = 0; i < inversionCount; i += 1) {
+    const frequency = invertedFrequencies.shift();
+    invertedFrequencies.push(frequency * 2);
+  }
+
+  return invertedFrequencies;
+}
+
 function dbToGain(db) {
   return Math.pow(10, db / 20);
 }
@@ -218,6 +274,34 @@ function pickTemperatureRegister(notes, temperature) {
   return notes.slice(registerIndex * 2, registerIndex * 2 + 4);
 }
 
+function buildMarsMicrotonalMaterial(selectedKey, selectedMode, temperature) {
+  const rootSemitone = NOTE_TO_SEMITONE[selectedKey] ?? NOTE_TO_SEMITONE.C;
+  const baseFrequency = 130.8128 * Math.pow(2, rootSemitone / 12);
+  const fullScale = build53EdoScale(baseFrequency, selectedMode, 1, 21);
+  const scale = pickTemperatureRegister(fullScale, temperature);
+  const padInversion = Math.floor(getTemperatureRegisterIndex(temperature) / 2);
+  const padChordProgression = build53EdoPadChordProgression(
+    baseFrequency,
+    selectedMode,
+    padInversion
+  );
+
+  return {
+    fullScale,
+    scale,
+    bassNotes: [
+      frequencyFrom53EdoStep(baseFrequency / 2, 0),
+      frequencyFrom53EdoStep(baseFrequency / 2, 31),
+      frequencyFrom53EdoStep(baseFrequency / 2, 17),
+      frequencyFrom53EdoStep(baseFrequency / 2, 31),
+    ],
+    padNotes: padChordProgression[0],
+    padChordProgression,
+    tuning: "53-EDO",
+    timeSignature: [7, 4],
+  };
+}
+
 export function weatherToMusic(weather, selectedKey = "C", selectedMode = "major") {
   const temperature = weather.temperature_2m ?? 60;
   const windSpeed = weather.wind_speed_10m ?? 0;
@@ -226,6 +310,7 @@ export function weatherToMusic(weather, selectedKey = "C", selectedMode = "major
   const humidity = weather.relative_humidity_2m ?? 50;
   const weatherCode = weather.weather_code ?? 0;
   const pressure = weather.pressure_msl ?? 1013;
+  const isMars = weather.isMars ?? false;
 
   const isRainy =
     rain > 0 || [51, 53, 55, 61, 63, 65, 80, 81, 82].includes(weatherCode);
@@ -251,16 +336,24 @@ export function weatherToMusic(weather, selectedKey = "C", selectedMode = "major
     scaleName = "cold";
   }
 
-  const fullScale = buildModeScale(selectedKey, selectedMode, 3, 14);
-  const scale = pickTemperatureRegister(fullScale, temperature);
-  const bassNotes = buildBassNotes(selectedKey, selectedMode, isStormy);
   const padInversion = Math.floor(getTemperatureRegisterIndex(temperature) / 2);
-  const padNotes = buildPadNotes(selectedKey, selectedMode, padInversion);
-  const padChordProgression = buildPadChordProgression(
-    selectedKey,
-    selectedMode,
-    padInversion
-  );
+  const pitchedMaterial = isMars
+    ? buildMarsMicrotonalMaterial(selectedKey, selectedMode, temperature)
+    : {
+        fullScale: buildModeScale(selectedKey, selectedMode, 3, 14),
+        bassNotes: buildBassNotes(selectedKey, selectedMode, isStormy),
+        padNotes: buildPadNotes(selectedKey, selectedMode, padInversion),
+        padChordProgression: buildPadChordProgression(
+          selectedKey,
+          selectedMode,
+          padInversion
+        ),
+        tuning: "12-TET",
+        timeSignature: [4, 4],
+      };
+  const scale = isMars
+    ? pitchedMaterial.scale
+    : pickTemperatureRegister(pitchedMaterial.fullScale, temperature);
 
   const brightness = Math.max(3000, 20000 - cloudCover * 170);
   const humidityAmount = clamp(humidity / 100, 0, 1);
@@ -297,16 +390,19 @@ export function weatherToMusic(weather, selectedKey = "C", selectedMode = "major
     humidity,
     weatherCode,
     pressure,
+    isMars,
     selectedKey,
     selectedMode,
+    tuning: pitchedMaterial.tuning,
+    timeSignature: pitchedMaterial.timeSignature,
     bpm,
     scaleName,
-    fullScale,
+    fullScale: pitchedMaterial.fullScale,
     scale,
-    bassNotes,
+    bassNotes: pitchedMaterial.bassNotes,
     padInversion,
-    padNotes,
-    padChordProgression,
+    padNotes: pitchedMaterial.padNotes,
+    padChordProgression: pitchedMaterial.padChordProgression,
     padGain,
     padVolumeDb,
     padFilterDepth,

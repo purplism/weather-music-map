@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   MapContainer,
   TileLayer,
+  WMSTileLayer,
   useMap,
   useMapEvents,
   Marker,
@@ -18,11 +19,32 @@ import {
 import L from "leaflet";
 import { getClickedPlace } from "./location";
 import { getWeather } from "./weather";
+import { getMarsWeather } from "./marsWeather";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
 
 const RADAR_MAX_ZOOM = 7;
 const RADAR_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const PLANETS = {
+  earth: {
+    label: "Earth",
+    mapCenter: [20, 0],
+    zoom: 2,
+    minZoom: 2,
+    maxZoom: 18,
+  },
+  mars: {
+    label: "Mars",
+    mapCenter: [0, 180],
+    maxBounds: [
+      [-90, 0],
+      [90, 360],
+    ],
+    zoom: 2,
+    minZoom: 1,
+    maxZoom: 8,
+  },
+};
 const MUSIC_KEYS = [
   "C",
   "C#",
@@ -38,6 +60,18 @@ const MUSIC_KEYS = [
   "B",
 ];
 const MUSIC_MODES = ["major", "minor"];
+const MARS_SEASONS = [
+  ["spring", "Spring"],
+  ["summer", "Summer"],
+  ["fall", "Fall"],
+  ["winter", "Winter"],
+];
+const MARS_TIMES_OF_DAY = [
+  ["dawn", "Dawn"],
+  ["midday", "Midday"],
+  ["dusk", "Dusk"],
+  ["midnight", "Midnight"],
+];
 
 const selectedLocationIcon = L.divIcon({
   className: "selected-location-pin",
@@ -57,11 +91,20 @@ function getRandomLocation() {
   return { lat, lon };
 }
 
-function ClickHandler({ onMapClick }) {
+function getRandomMarsLocation() {
+  const lat = -70 + Math.random() * 140;
+  const lon = -180 + Math.random() * 360;
+
+  return { lat, lon };
+}
+
+function ClickHandler({ onMapClick, normalizeClickLongitude }) {
   useMapEvents({
     click(e) {
       const lat = e.latlng.lat;
-      const lon = normalizeLongitude(e.latlng.lng);
+      const lon = normalizeClickLongitude
+        ? normalizeLongitude(e.latlng.lng)
+        : e.latlng.lng;
 
       onMapClick(lat, lon);
     },
@@ -111,6 +154,7 @@ function formatRadarTime(frame, isLatest) {
 }
 
 function App() {
+  const [planet, setPlanet] = useState("earth");
   const [clickedLocation, setClickedLocation] = useState(null);
   const [clickedPlace, setClickedPlace] = useState(null);
   const [weather, setWeather] = useState(null);
@@ -123,6 +167,8 @@ function App() {
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
   const [selectedKey, setSelectedKey] = useState("C");
   const [selectedMode, setSelectedMode] = useState("major");
+  const [marsSeason, setMarsSeason] = useState("fall");
+  const [marsTimeOfDay, setMarsTimeOfDay] = useState("midday");
   const [volume, setVolume] = useState(0.7);
 
   const latestRequestId = useRef(0);
@@ -141,6 +187,8 @@ function App() {
     : radarFrames.length > 0
     ? selectedRadarTime
     : "Loading...";
+  const isMars = planet === "mars";
+  const currentPlanet = PLANETS[planet];
 
   useEffect(() => {
     async function refreshRadar() {
@@ -221,25 +269,40 @@ function App() {
     }
 
     setClickedLocation({ lat, lon });
-    setClickedPlace(null);
+    setClickedPlace(
+      isMars
+        ? {
+            municipality: "Mars",
+            country: "Elysium Planitia",
+          }
+        : null
+    );
     setWeather(null);
     setWeatherError("");
     setLoadingWeather(true);
 
-    getClickedPlace(lat, lon, controller.signal)
-      .then((place) => {
-        if (requestId === latestRequestId.current) {
-          setClickedPlace(place);
-        }
-      })
-      .catch((error) => {
-        if (error.name !== "AbortError") {
-          console.error(error);
-        }
-      });
+    if (!isMars) {
+      getClickedPlace(lat, lon, controller.signal)
+        .then((place) => {
+          if (requestId === latestRequestId.current) {
+            setClickedPlace(place);
+          }
+        })
+        .catch((error) => {
+          if (error.name !== "AbortError") {
+            console.error(error);
+          }
+        });
+    }
 
     try {
-      const currentWeather = await getWeather(lat, lon, controller.signal);
+      const currentWeather = isMars
+        ? await getMarsWeather(controller.signal, {
+            latitude: lat,
+            season: marsSeason,
+            timeOfDay: marsTimeOfDay,
+          })
+        : await getWeather(lat, lon, controller.signal);
 
       if (requestId !== latestRequestId.current) {
         return;
@@ -299,7 +362,7 @@ function App() {
       return;
     }
 
-    const randomLocation = getRandomLocation();
+    const randomLocation = isMars ? getRandomMarsLocation() : getRandomLocation();
     handleMapClick(randomLocation.lat, randomLocation.lon);
   }
 
@@ -345,6 +408,90 @@ function App() {
     updateCurrentMusic(selectedKey, newMode);
   }
 
+  async function updateMarsWeatherControls(nextSeason, nextTimeOfDay) {
+    if (!isMars || !clickedLocation) {
+      return;
+    }
+
+    const requestId = latestRequestId.current + 1;
+    latestRequestId.current = requestId;
+
+    weatherAbortController.current?.abort();
+    const controller = new AbortController();
+    weatherAbortController.current = controller;
+    setLoadingWeather(true);
+    setWeatherError("");
+
+    try {
+      const currentWeather = await getMarsWeather(controller.signal, {
+        latitude: clickedLocation.lat,
+        season: nextSeason,
+        timeOfDay: nextTimeOfDay,
+      });
+
+      if (requestId !== latestRequestId.current) {
+        return;
+      }
+
+      setWeather(currentWeather);
+
+      if (isMusicPlaying) {
+        const musicSettings = weatherToMusic(
+          currentWeather,
+          selectedKey,
+          selectedMode
+        );
+
+        await requestWeatherMusicChange(musicSettings);
+      }
+    } catch (error) {
+      if (error.name === "AbortError" || requestId !== latestRequestId.current) {
+        return;
+      }
+
+      console.error(error);
+      setWeatherError("Could not update Mars weather controls.");
+    } finally {
+      if (requestId === latestRequestId.current) {
+        weatherAbortController.current = null;
+        setLoadingWeather(false);
+      }
+    }
+  }
+
+  function handleMarsSeasonChange(e) {
+    const nextSeason = e.target.value;
+
+    setMarsSeason(nextSeason);
+    updateMarsWeatherControls(nextSeason, marsTimeOfDay);
+  }
+
+  function handleMarsTimeOfDayChange(e) {
+    const nextTimeOfDay = e.target.value;
+
+    setMarsTimeOfDay(nextTimeOfDay);
+    updateMarsWeatherControls(marsSeason, nextTimeOfDay);
+  }
+
+  function handlePlanetChange(nextPlanet) {
+    if (nextPlanet === planet) {
+      return;
+    }
+
+    latestRequestId.current += 1;
+    weatherAbortController.current?.abort();
+    weatherAbortController.current = null;
+    stopWeatherMusic();
+
+    setPlanet(nextPlanet);
+    setClickedLocation(null);
+    setClickedPlace(null);
+    setWeather(null);
+    setWeatherError("");
+    setLoadingWeather(false);
+    setIsMusicPlaying(false);
+  }
+
   const musicTitle = clickedPlace
     ? `🎵${clickedPlace.municipality}, ${clickedPlace.country}🎵`
     : "Music";
@@ -353,42 +500,104 @@ function App() {
     <div className="app">
       <div className="sidebar">
         <h1>Weather Music Map</h1>
-        <p>Click anywhere on the map.</p>
+        <p>
+          {isMars
+            ? "Click Mars to hear the latest available NASA weather profile."
+            : "Click anywhere on the map."}
+        </p>
 
         <div className="control-box">
-          <h2>Map Style</h2>
+          <h2>Travel</h2>
 
           <button
-            className={mapStyle === "default" ? "active-button" : ""}
-            onClick={() => setMapStyle("default")}
+            className={!isMars ? "active-button" : ""}
+            onClick={() => handlePlanetChange("earth")}
           >
-            Default
+            Earth
           </button>
 
           <button
-            className={mapStyle === "satellite" ? "active-button" : ""}
-            onClick={() => setMapStyle("satellite")}
+            className={isMars ? "active-button" : ""}
+            onClick={() => handlePlanetChange("mars")}
           >
-            Satellite
+            Mars
           </button>
+        </div>
 
-          <div className="volume-control">
-            <label htmlFor="radar-time-slider">
-              Radar: {radarControlLabel}
-            </label>
+        <div className="control-box">
+          <h2>{isMars ? "Mars Topography" : "Map Style"}</h2>
 
-            <input
-              id="radar-time-slider"
-              type="range"
-              min="0"
-              max={Math.max(0, radarFrames.length - 1)}
-              step="1"
-              value={selectedRadarFrameIndex}
-              onChange={handleRadarFrameChange}
-              onInput={handleRadarFrameChange}
-              disabled={radarFrames.length === 0}
-            />
-          </div>
+          {!isMars && (
+            <>
+              <button
+                className={mapStyle === "default" ? "active-button" : ""}
+                onClick={() => setMapStyle("default")}
+              >
+                Default
+              </button>
+
+              <button
+                className={mapStyle === "satellite" ? "active-button" : ""}
+                onClick={() => setMapStyle("satellite")}
+              >
+                Satellite
+              </button>
+            </>
+          )}
+
+          {isMars ? (
+            <>
+              <p className="control-note">USGS MOLA color topography</p>
+
+              <label className="select-control" htmlFor="mars-season">
+                Season
+                <select
+                  id="mars-season"
+                  value={marsSeason}
+                  onChange={handleMarsSeasonChange}
+                >
+                  {MARS_SEASONS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="select-control" htmlFor="mars-time-of-day">
+                Time of Day
+                <select
+                  id="mars-time-of-day"
+                  value={marsTimeOfDay}
+                  onChange={handleMarsTimeOfDayChange}
+                >
+                  {MARS_TIMES_OF_DAY.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          ) : (
+            <div className="volume-control">
+              <label htmlFor="radar-time-slider">
+                Radar: {radarControlLabel}
+              </label>
+
+              <input
+                id="radar-time-slider"
+                type="range"
+                min="0"
+                max={Math.max(0, radarFrames.length - 1)}
+                step="1"
+                value={selectedRadarFrameIndex}
+                onChange={handleRadarFrameChange}
+                onInput={handleRadarFrameChange}
+                disabled={radarFrames.length === 0}
+              />
+            </div>
+          )}
         </div>
 
         <div className="control-box">
@@ -453,6 +662,16 @@ function App() {
         {weather && (
           <div className="weather-box">
             <h2>Current Weather</h2>
+            {weather.isMars && (
+              <>
+                <p>
+                  <strong>Source:</strong> {weather.marsWeatherSource}
+                </p>
+                <p>
+                  <strong>Status:</strong> {weather.marsWeatherStatus}
+                </p>
+              </>
+            )}
             <p>
               <strong>Temperature:</strong> {weather.temperature_2m} °F
             </p>
@@ -472,8 +691,24 @@ function App() {
               <strong>Rain:</strong> {weather.rain} in
             </p>
             <p>
-              <strong>Local Time:</strong> {weather.localTime}
+              <strong>{weather.isMars ? "Mars Time:" : "Local Time:"}</strong>{" "}
+              {weather.localTime}
             </p>
+            {weather.isMars && (
+              <>
+                <p>
+                  <strong>Season:</strong>{" "}
+                  {weather.marsSelectedSeasonLabel ?? weather.marsSeason}
+                </p>
+                <p>
+                  <strong>Time of Day:</strong>{" "}
+                  {weather.marsSelectedTimeOfDayLabel}
+                </p>
+                <p>
+                  <strong>Wind Direction:</strong> {weather.marsWindDirection}
+                </p>
+              </>
+            )}
             {clickedLocation && (
               <>
                 <p>
@@ -489,15 +724,19 @@ function App() {
       </div>
 
       <MapContainer
-        center={[20, 0]}
-        zoom={2}
-        minZoom={2}
-        maxZoom={18}
-        worldCopyJump={true}
+        key={planet}
+        center={currentPlanet.mapCenter}
+        zoom={currentPlanet.zoom}
+        minZoom={currentPlanet.minZoom}
+        maxZoom={currentPlanet.maxZoom}
+        worldCopyJump={!isMars}
+        crs={isMars ? L.CRS.EPSG4326 : L.CRS.EPSG3857}
+        maxBounds={currentPlanet.maxBounds}
+        maxBoundsViscosity={isMars ? 1 : 0}
         className="map"
         attributionControl={false}
       >
-        {mapStyle === "default" && (
+        {!isMars && mapStyle === "default" && (
           <TileLayer
             key="default-map"
             attribution='&copy; OpenStreetMap contributors &copy; CARTO'
@@ -506,7 +745,7 @@ function App() {
           />
         )}
 
-        {mapStyle === "satellite" && (
+        {!isMars && mapStyle === "satellite" && (
           <TileLayer
             key="satellite-map"
             attribution="Tiles &copy; Esri"
@@ -515,7 +754,20 @@ function App() {
           />
         )}
 
-        <RadarLayer radarUrl={selectedRadarFrame?.url ?? ""} />
+        {isMars && (
+          <WMSTileLayer
+            key="mars-topography"
+            attribution="Mars MOLA topography &copy; USGS Astrogeology"
+            url="https://planetarymaps.usgs.gov/cgi-bin/mapserv?map=/maps/mars/mars_simp_cyl.map"
+            layers="MOLA_color"
+            format="image/png"
+            transparent={false}
+            version="1.1.1"
+            zIndex={100}
+          />
+        )}
+
+        {!isMars && <RadarLayer radarUrl={selectedRadarFrame?.url ?? ""} />}
 
         {/* <TileLayer
           key="labels-layer"
@@ -535,7 +787,10 @@ function App() {
 
         <AttributionControl position="bottomright" prefix={false} />
 
-        <ClickHandler onMapClick={handleMapClick} />
+        <ClickHandler
+          onMapClick={handleMapClick}
+          normalizeClickLongitude={!isMars}
+        />
       </MapContainer>
     </div>
   );

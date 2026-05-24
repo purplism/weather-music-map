@@ -41,6 +41,8 @@ function silenceMasterVolume() {
 function getSafeSettings(settings) {
   return {
     bpm: settings.bpm ?? 90,
+    timeSignature: settings.timeSignature ?? [4, 4],
+    tuning: settings.tuning ?? "12-TET",
     scale: settings.scale?.length ? settings.scale : ["C3", "D3", "G3", "A3"],
     bassNotes: settings.bassNotes?.length
       ? settings.bassNotes
@@ -145,6 +147,10 @@ function updateEffectParameters(settings, time) {
 }
 
 function transposeNoteByOctave(note) {
+  if (typeof note === "number") {
+    return note * 2;
+  }
+
   const match = /^([A-G](?:#|b)?)(-?\d+)$/.exec(note);
 
   if (!match) {
@@ -152,6 +158,14 @@ function transposeNoteByOctave(note) {
   }
 
   return `${match[1]}${Number(match[2]) + 1}`;
+}
+
+function getPitchFrequency(pitch) {
+  return typeof pitch === "number" ? pitch : Tone.Frequency(pitch).toFrequency();
+}
+
+function applyTransportMeter(settings) {
+  Tone.Transport.timeSignature = settings.timeSignature;
 }
 
 function createEngine() {
@@ -400,7 +414,7 @@ function createEngine() {
       : 0.88;
 
     if (Math.random() < chance) {
-      const duration = settings.isFoggy ? "4n" : "8n";
+      const duration = settings.tuning === "53-EDO" ? "4n" : settings.isFoggy ? "4n" : "8n";
       const arpLength = Math.max(3, Math.round(settings.melodyArpLength));
       const step = Math.max(1, settings.windSpeed > 10 ? 2 : 1);
       let noteTime = time;
@@ -499,7 +513,6 @@ function createEngine() {
       (settings.isStormy || settings.lowPressurePercussion > 0.45) &&
       Math.random() < accentChance
     ) {
-      bassSynth.triggerAttackRelease(settings.bassNotes[0], "8n", time);
       rainSynth.triggerAttackRelease("16n", time);
     }
   }, "2n");
@@ -548,7 +561,7 @@ function createEngine() {
       if (Math.random() < chance) {
         const note = settings.scale[sparkleIndex % settings.scale.length];
         sparkleSynth.frequency.setValueAtTime(
-          Tone.Frequency(note).toFrequency(),
+          getPitchFrequency(note),
           time
         );
         sparkleSynth.triggerAttackRelease("16n", time);
@@ -635,6 +648,7 @@ export async function requestWeatherMusicChange(settings) {
 
   if (Tone.Transport.state !== "started") {
     activeSettings = safeSettings;
+    applyTransportMeter(safeSettings);
     Tone.Transport.bpm.value = safeSettings.bpm;
 
     updateEffectParameters(safeSettings, Tone.now());
@@ -653,6 +667,7 @@ export async function requestWeatherMusicChange(settings) {
 
   pendingSwitchId = Tone.Transport.scheduleOnce((time) => {
     activeSettings = safeSettings;
+    applyTransportMeter(safeSettings);
 
     Tone.Transport.bpm.cancelScheduledValues(time);
     Tone.Transport.bpm.setValueAtTime(Tone.Transport.bpm.value, time);
