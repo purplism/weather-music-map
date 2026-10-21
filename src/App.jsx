@@ -20,6 +20,7 @@ import L from "leaflet";
 import { getClickedPlace } from "./location";
 import { getWeather } from "./weather";
 import { getMarsWeather } from "./marsWeather";
+import { downloadMidi } from "./midiExport";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
 
@@ -71,6 +72,13 @@ const MARS_TIMES_OF_DAY = [
   ["midday", "Midday"],
   ["dusk", "Dusk"],
   ["midnight", "Midnight"],
+];
+const MIDI_EXPORT_OPTIONS = [
+  ["melody", "Melody"],
+  ["bass", "Bass"],
+  ["pad", "Pad"],
+  ["percussion", "Percussion"],
+  ["all", "All"],
 ];
 
 const selectedLocationIcon = L.divIcon({
@@ -169,6 +177,7 @@ function App() {
   const [selectedMode, setSelectedMode] = useState("major");
   const [marsSeason, setMarsSeason] = useState("fall");
   const [marsTimeOfDay, setMarsTimeOfDay] = useState("midday");
+  const [midiExportTarget, setMidiExportTarget] = useState("melody");
   const [volume, setVolume] = useState(0.7);
 
   const latestRequestId = useRef(0);
@@ -473,6 +482,14 @@ function App() {
     updateMarsWeatherControls(marsSeason, nextTimeOfDay);
   }
 
+  function handleMidiDownload() {
+    if (!weather) {
+      return;
+    }
+
+    downloadMidi(weatherToMusic(weather, selectedKey, selectedMode), midiExportTarget);
+  }
+
   function handlePlanetChange(nextPlanet) {
     if (nextPlanet === planet) {
       return;
@@ -651,6 +668,29 @@ function App() {
               onChange={handleVolumeChange}
             />
           </div>
+
+          <label className="select-control" htmlFor="midi-export-target">
+            MIDI Export
+            <select
+              id="midi-export-target"
+              value={midiExportTarget}
+              onChange={(e) => setMidiExportTarget(e.target.value)}
+            >
+              {MIDI_EXPORT_OPTIONS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            className="midi-download-button"
+            onClick={handleMidiDownload}
+            disabled={!weather}
+          >
+            Download
+          </button>
         </div>
 
         {!clickedLocation && <p>No location selected yet.</p>}
@@ -739,8 +779,8 @@ function App() {
         {!isMars && mapStyle === "default" && (
           <TileLayer
             key="default-map"
-            attribution='&copy; OpenStreetMap contributors &copy; CARTO'
-            url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             zIndex={100}
           />
         )}
@@ -768,13 +808,6 @@ function App() {
         )}
 
         {!isMars && <RadarLayer radarUrl={selectedRadarFrame?.url ?? ""} />}
-
-        {/* <TileLayer
-          key="labels-layer"
-          attribution='&copy; OpenStreetMap contributors &copy; CARTO'
-          url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
-          zIndex={400}
-        /> */}
 
         {clickedLocation && (
           <Marker

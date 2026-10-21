@@ -1,0 +1,28 @@
+{
+  "projectId": "theremidi",
+  "title": "Theremidi",
+  "tempoBpm": 102,
+  "meter": [4, 4],
+  "primaryKey": "A# minor",
+  "notesFile": "notes.txt",
+  "sourceFiles": {
+    "fullMix": "/Users/milosmaglich/Desktop/Ableton/Demos/102 theremidi demo V1.wav",
+    "stemsZip": "/Users/milosmaglich/Desktop/AI model stems/Theremidi stems.zip",
+    "midiZip": "/Users/milosmaglich/Desktop/AI model stems/MIDI.zip"
+  },
+  "audio": {
+    "sampleRate": 44100,
+    "channels": 2,
+    "format": "Float32 WAV",
+    "durationSeconds": 254.117664
+  },
+  "harmony": {
+    "global": "A# minor",
+    "verse": "A# minor with modal/chromatic variation",
+    "chorus": "A# minor",
+    "chorusFinalEightBars": "A# harmonic minor color"
+  },
+  "roleNotes": {
+    "drums": "MIDI note numbers are kit mappings, not harmonic pitches."
+  }
+}

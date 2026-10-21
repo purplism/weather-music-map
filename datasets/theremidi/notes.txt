@@ -1,0 +1,26 @@
+Project: Theremidi
+Tempo: 102 BPM
+Meter: 4/4
+Primary key: A# minor
+Verse sections: A# minor with some modal/chromatic variation
+Chorus sections: A# minor
+Last 8 bars of each chorus: A# harmonic minor color
+Audio file includes a 4-bar rainy-day sample before the intro.
+Total audio timeline: 108 bars including fadeout.
+Final drum break ends on bar 107.
+
+001 Rainy Day Sample - 4 bars
+005 Intro - 16 bars
+021 Drum Break 1 - 2 bars
+023 Verse 1 - 16 bars
+039 Chorus 1 - 24 bars
+063 Drum Break 2 - 2 bars
+065 Verse 2 - 16 bars
+081 Chorus 2 - 24 bars
+105 Drum Break 3 - 2 bars
+107 Fadeout / End Tail - 2 bars
+
+MIDI notes:
+- Drum MIDI note numbers are kit mappings, not pitched harmony.
+- Treat A natural in chorus endings as harmonic-minor color.
+- Treat G# in verse/chorus material as natural-minor color.

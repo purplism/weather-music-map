@@ -1,0 +1,123 @@
+{
+  "projectId": "theremidi",
+  "tempoBpm": 102,
+  "meter": [4, 4],
+  "barDurationSeconds": 2.3529411765,
+  "totalBars": 108,
+  "sections": [
+    {
+      "name": "Rainy Day Sample",
+      "startBar": 1,
+      "barCount": 4,
+      "startSeconds": 0,
+      "endSeconds": 9.411765,
+      "key": null,
+      "notes": "Field/sample pre-roll before musical intro."
+    },
+    {
+      "name": "Intro",
+      "startBar": 5,
+      "barCount": 16,
+      "startSeconds": 9.411765,
+      "endSeconds": 47.058824,
+      "key": "A# minor"
+    },
+    {
+      "name": "Drum Break 1",
+      "startBar": 21,
+      "barCount": 2,
+      "startSeconds": 47.058824,
+      "endSeconds": 51.764706,
+      "key": null,
+      "notes": "Drum MIDI should be treated as kit mapping."
+    },
+    {
+      "name": "Verse 1",
+      "startBar": 23,
+      "barCount": 16,
+      "startSeconds": 51.764706,
+      "endSeconds": 89.411765,
+      "key": "A# minor",
+      "notes": "A# minor with modal/chromatic variation."
+    },
+    {
+      "name": "Chorus 1",
+      "startBar": 39,
+      "barCount": 24,
+      "startSeconds": 89.411765,
+      "endSeconds": 145.882353,
+      "key": "A# minor",
+      "subsections": [
+        {
+          "name": "Chorus 1 main",
+          "startBar": 39,
+          "barCount": 16,
+          "key": "A# minor"
+        },
+        {
+          "name": "Chorus 1 final 8",
+          "startBar": 55,
+          "barCount": 8,
+          "key": "A# harmonic minor color"
+        }
+      ]
+    },
+    {
+      "name": "Drum Break 2",
+      "startBar": 63,
+      "barCount": 2,
+      "startSeconds": 145.882353,
+      "endSeconds": 150.588235,
+      "key": null,
+      "notes": "Drum MIDI should be treated as kit mapping."
+    },
+    {
+      "name": "Verse 2",
+      "startBar": 65,
+      "barCount": 16,
+      "startSeconds": 150.588235,
+      "endSeconds": 188.235294,
+      "key": "A# minor",
+      "notes": "A# minor with modal/chromatic variation."
+    },
+    {
+      "name": "Chorus 2",
+      "startBar": 81,
+      "barCount": 24,
+      "startSeconds": 188.235294,
+      "endSeconds": 244.705882,
+      "key": "A# minor",
+      "subsections": [
+        {
+          "name": "Chorus 2 main",
+          "startBar": 81,
+          "barCount": 16,
+          "key": "A# minor"
+        },
+        {
+          "name": "Chorus 2 final 8",
+          "startBar": 97,
+          "barCount": 8,
+          "key": "A# harmonic minor color"
+        }
+      ]
+    },
+    {
+      "name": "Drum Break 3",
+      "startBar": 105,
+      "barCount": 2,
+      "startSeconds": 244.705882,
+      "endSeconds": 249.411765,
+      "key": null,
+      "notes": "Final drum break ends on bar 107."
+    },
+    {
+      "name": "Fadeout / End Tail",
+      "startBar": 107,
+      "barCount": 2,
+      "startSeconds": 249.411765,
+      "endSeconds": 254.117664,
+      "key": null
+    }
+  ]
+}

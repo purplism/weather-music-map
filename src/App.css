@@ -129,6 +129,12 @@ body {
   padding: 0;
 }
 
+.midi-download-button {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 10px;
+}
+
 @media (max-width: 760px) {
   .app {
     flex-direction: column;
